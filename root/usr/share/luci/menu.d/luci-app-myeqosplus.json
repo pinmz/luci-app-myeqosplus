@@ -1,0 +1,25 @@
+{
+	"admin/control/myeqosplus": {
+		"title": "My eQoS Plus",
+		"order": 10,
+		"action": {
+			"type": "firstchild"
+		}
+	},
+	"admin/control/myeqosplus/devices": {
+		"title": "Devices",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "myeqosplus/devices"
+		}
+	},
+	"admin/control/myeqosplus/settings": {
+		"title": "Settings",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "myeqosplus/settings"
+		}
+	}
+}

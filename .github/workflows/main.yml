@@ -27,16 +27,16 @@ jobs:
       - name: Building packages
         uses: sbwml/openwrt-gh-action-sdk@go1.24
         env:
-          ARCH: ${{ matrix.arch }}-openwrt-24.10
+          ARCH: ${{ matrix.arch }}-openwrt-25.12
           FEEDNAME: packages_ci
-          PACKAGES: luci-app-eqosplus
+          PACKAGES: luci-app-myeqosplus
           NO_REFRESH_CHECK: true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.arch }}
-          path: bin/packages/${{ matrix.arch }}/packages_ci/*.ipk
+          path: bin/packages/${{ matrix.arch }}/packages_ci/*.apk
 
       - name: Upload packages
         uses: ncipollo/release-action@v1
@@ -44,4 +44,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           allowUpdates: true
           replacesArtifacts: true
-          artifacts: "bin/packages/${{ matrix.arch }}/packages_ci/*.ipk"
+          artifacts: "bin/packages/${{ matrix.arch }}/packages_ci/*.apk"

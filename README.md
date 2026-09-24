@@ -1,91 +1,29 @@
-![hello](https://views.whatilearened.today/views/github/sirpdboy/deplives.svg) [![](https://img.shields.io/badge/TG群-点击加入-FFFFFF.svg)](https://t.me/joinchat/AAAAAEpRF88NfOK5vBXGBQ)
+# luci-app-myeqosplus
 
-<h1 align="center">
-  <br>luci-app-eqosplus<br>
-</h1>
+My eQoS Plus is an isolated OpenWrt 25.12 LuCI package derived from luci-app-eqosplus. It combines current and historical device discovery from Wi-Fi, DHCP, wired bridge FDB, IPv4/IPv6 neighbors and optional luci-app-wifihistory data.
 
-<p align="center">
-<a href="https://openwrt.org"><img alt="OpenWrt" src="https://img.shields.io/badge/OpenWrt-%E2%89%A519.07-ff0000?logo=openwrt&logoColor=white"></a>
-<a href="https://www.google.com/chrome/"><img alt="Chrome" src="https://img.shields.io/badge/Chrome-%E2%89%A5111-4285F3?logo=googlechrome&logoColor=white"></a>
-<a href="https://www.apple.com/safari/"><img alt="Safari" src="https://img.shields.io/badge/Safari-%E2%89%A516.4-000000?logo=safari&logoColor=white"></a>
-<a href="https://www.mozilla.org/firefox/"><img alt="Firefox" src="https://img.shields.io/badge/Firefox-%E2%89%A5128-FF7138?logo=firefoxbrowser&logoColor=white"></a>
-<a target="_blank" href="https://github.com/sirpdboy/luci-app-eqosplus/releases"> <img alt="GitHub release" src="https://img.shields.io/github/v/release/sirpdboy/luci-app-eqosplus"></a>
-<a href="https://github.com/sirpdboy/luci-app-eqosplus/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/sirpdboy/luci-app-eqosplus/total"></a>
-</p>
+Policies are bound to normalized MAC addresses, so IPv4/IPv6 changes and offline periods do not lose a device policy. The LuCI device page lets users configure upload/download limits, schedules and enable state directly on each device.
 
-[中文] | [English](README.md) 
+The package uses the `myeqosplus` namespace for its UCI config, init script, provider, nftables table, controller, view and ACL. Existing root qdiscs are protected by default: `mq`, CAKE, SQM and other unmanaged qdiscs require an explicit `multiqueue_policy=takeover` choice. Firewall4 flow-offloading values are saved before QoS activation and restored on stop or failure.
 
-![screenshots](https://raw.githubusercontent.com/sirpdboy/openwrt/master/doc/说明1.jpg)
+## Build
 
-Please read this page carefully, which includes precautions and instructions on how to use it.
+```sh
+make defconfig
+make package/luci-app-myeqosplus/compile V=s
+```
 
-## Enhanced version of EQOS with timed speed limit and added features such as timed limit.
+LuCI entry point:
 
-### Method for downloading source code:
+```text
+/cgi-bin/luci/admin/control/myeqosplus/devices
+```
 
- ```Brach
-    # downloading
-    git clone https://github.com/sirpdboy/luci-app-eqosplus package/luci-app-eqosplus
-    make menuconfig
- ``` 
-### Configuration Menu
- ```Brach
-    make menuconfig
-	# find LuCI -> Applications, select luci-app-eqosplus, save and exit
- ``` 
-### compile
+Device discovery commands:
 
- ```Brach 
-    # compile
-    make package/luci-app-eqosplus/compile V=s
- ```
-
-
-## describe
-
-- luci-app-eqosplus ： https://github.com/sirpdboy/luci-app-eqosplus
-
-![screenshots](https://raw.githubusercontent.com/sirpdboy/openwrt/master/doc/说明2.jpg)
-
-
-## interface
-
-![screenshots](./doc/eqosplus0.png)
-
-![screenshots](./doc/eqosplus1.png)
-
-![screenshots](https://raw.githubusercontent.com/sirpdboy/openwrt/master/doc/eqosplus.png)
-
-![screenshots](https://raw.githubusercontent.com/sirpdboy/openwrt/master/doc/eqosplus2.png)
-
-
-# My other project
-
-- Watch Dog ： https://github.com/sirpdboy/luci-app-watchdog
-- Net Speedtest ： https://github.com/sirpdboy/luci-app-netspeedtest
-- Task Plan : https://github.com/sirpdboy/luci-app-taskplan
-- Power Off Device : https://github.com/sirpdboy/luci-app-poweroffdevice
-- OpentoPD Theme : https://github.com/sirpdboy/luci-theme-opentopd
-- KuCat Theme : https://github.com/sirpdboy/luci-theme-kucat
-- KuCat Theme Config : https://github.com/sirpdboy/luci-app-kucat-config
-- NFT Time Control : https://github.com/sirpdboy/luci-app-timecontrol
-- Parent Control: https://github.com/sirpdboy/luci-theme-parentcontrol
-- Eqos Plus: https://github.com/sirpdboy/luci-app-eqosplus
-- Advanced : https://github.com/sirpdboy/luci-app-advanced
-- ddns-go : https://github.com/sirpdboy/luci-app-ddns-go
-- Advanced Plus）: https://github.com/sirpdboy/luci-app-advancedplus
-- Net Wizard: https://github.com/sirpdboy/luci-app-netwizard
-- Part Exp: https://github.com/sirpdboy/luci-app-partexp
-- Lukcy: https://github.com/sirpdboy/luci-app-lukcy
-
-## HELP
-
-|     <img src="https://img.shields.io/badge/-Alipay-F5F5F5.svg" href="#赞助支持本项目-" height="25" alt="图飞了"/>  |  <img src="https://img.shields.io/badge/-WeChat-F5F5F5.svg" height="25" alt="图飞了" href="#赞助支持本项目-"/>  | 
-| :-----------------: | :-------------: |
-|![xm1](https://raw.githubusercontent.com/sirpdboy/openwrt/master/doc/支付宝.png) | ![xm1](https://raw.githubusercontent.com/sirpdboy/openwrt/master/doc/微信.png) |
-
-<a href="#readme">
-    <img src="https://img.shields.io/badge/-TOP-orange.svg" alt="no" title="Return TOP" align="right"/>
-</a>
-
-![hello](https://visitor-badge-deno.deno.dev/sirpdboy.sirpdboy.svg) [![](https://img.shields.io/badge/TGGroup-ClickJoin-FFFFFF.svg)](https://t.me/joinchat/AAAAAEpRF88NfOK5vBXGBQ)
+```sh
+/usr/sbin/myeqosplus-devices refresh
+/usr/sbin/myeqosplus-devices list
+/usr/sbin/myeqosplus-devices status
+/usr/bin/myeqosplus status-json
+```

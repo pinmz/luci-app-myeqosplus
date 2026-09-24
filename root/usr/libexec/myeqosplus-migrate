@@ -1,0 +1,79 @@
+#!/bin/sh
+# Migrate old eqosplus policies into the isolated myeqosplus model.
+# The migration is idempotent, keeps the old package untouched, converts the
+# legacy Mbps policy values to kbit/s and skips unsupported IP ranges.
+
+NAME=myeqosplus
+OLD=eqosplus
+LOG=/var/log/myeqosplus-migrate.log
+
+log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
+valid_mac() { printf '%s' "$1" | grep -Eq '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'; }
+valid_ip() {
+	printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && return 0
+	printf '%s' "$1" | grep -Eq '^[0-9A-Fa-f:]+$' && printf '%s' "$1" | grep -q ':'
+}
+legacy_kbit() {
+	case "$1" in
+		''|*[!0-9.]*) echo 0 ;;
+		*) awk -v v="$1" 'BEGIN { printf "%.0f\n", v * 8192 }' ;;
+	esac
+}
+
+uci -q get "$NAME.main.schema_version" >/dev/null 2>&1 || uci -q set "$NAME.main.schema_version=2"
+[ "$(uci -q get "$NAME.main.migration_version" 2>/dev/null)" = 2 ] && {
+	uci -q commit "$NAME"
+	exit 0
+}
+
+if [ -f /etc/config/$OLD ]; then
+	# Preserve the old global enable state and convert its global ceilings.
+	oldmain=$(uci -q show "$OLD" 2>/dev/null | sed -n "s/^$OLD\.@eqosplus\[[0-9][0-9]*\]\.enabled='\([^']*\)'.*/\1/p" | head -n 1)
+	[ "$oldmain" = 1 ] && uci -q set "$NAME.main.enabled=1"
+	oldul=$(uci -q show "$OLD" 2>/dev/null | sed -n "s/^$OLD\.@eqosplus\[[0-9][0-9]*\]\.upload='\([^']*\)'.*/\1/p" | head -n 1)
+	olddl=$(uci -q show "$OLD" 2>/dev/null | sed -n "s/^$OLD\.@eqosplus\[[0-9][0-9]*\]\.download='\([^']*\)'.*/\1/p" | head -n 1)
+	[ -n "$oldul" ] && uci -q set "$NAME.main.upload_ceiling_kbit=$(legacy_kbit "$oldul")"
+	[ -n "$olddl" ] && uci -q set "$NAME.main.download_ceiling_kbit=$(legacy_kbit "$olddl")"
+
+	count=$(uci -q show "$NAME" 2>/dev/null | sed -n "s/^$NAME\.\([^.]*\)=device$/\1/p" | wc -l)
+	[ "$count" -gt 0 ] 2>/dev/null || {
+		for oldsec in $(uci -q show "$OLD" 2>/dev/null | sed -n "s/^$OLD\.\(@device\[[0-9][0-9]*\]\)=.*/\1/p" | sort -u); do
+			raw=$(uci -q get "$OLD.$oldsec.mac" 2>/dev/null)
+			mode=
+			case "$raw" in
+				'') continue ;;
+				*)
+					if valid_mac "$raw"; then mode=mac
+					elif valid_ip "$raw"; then mode=address
+					else log "skip $oldsec: unsupported address/range '$raw'"; continue
+					fi
+				;;
+			esac
+			newsec=$(uci -q add "$NAME" device) || continue
+			if [ "$mode" = mac ]; then
+				uci -q set "$NAME.$newsec.mac=$(printf '%s' "$raw" | tr 'a-f' 'A-F')"
+			else
+				uci -q set "$NAME.$newsec.address=$raw"
+			fi
+			value=$(uci -q get "$OLD.$oldsec.enable" 2>/dev/null); [ -n "$value" ] || value=$(uci -q get "$OLD.$oldsec.enabled" 2>/dev/null); [ -n "$value" ] || value=0
+			uci -q set "$NAME.$newsec.enable=$value"
+			value=$(uci -q get "$OLD.$oldsec.download_kbit" 2>/dev/null)
+			[ -n "$value" ] || { value=$(uci -q get "$OLD.$oldsec.download" 2>/dev/null); [ -n "$value" ] && value=$(legacy_kbit "$value"); }
+			[ -n "$value" ] || value=0
+			uci -q set "$NAME.$newsec.download_kbit=$value"
+			value=$(uci -q get "$OLD.$oldsec.upload_kbit" 2>/dev/null)
+			[ -n "$value" ] || { value=$(uci -q get "$OLD.$oldsec.upload" 2>/dev/null); [ -n "$value" ] && value=$(legacy_kbit "$value"); }
+			[ -n "$value" ] || value=0
+			uci -q set "$NAME.$newsec.upload_kbit=$value"
+			for opt in comment name hostname timestart timeend week; do
+				value=$(uci -q get "$OLD.$oldsec.$opt" 2>/dev/null) || continue
+				case "$opt" in name|hostname) uci -q set "$NAME.$newsec.comment=$value" ;; *) uci -q set "$NAME.$newsec.$opt=$value" ;; esac
+			done
+		done
+	}
+fi
+
+uci -q set "$NAME.main.schema_version=2"
+uci -q set "$NAME.main.migration_version=2"
+uci -q commit "$NAME" || exit 1
+exit 0

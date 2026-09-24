@@ -1,0 +1,561 @@
+#!/bin/sh
+# My eQoS Plus provider: nftables marks + tc HTB/IFB.
+# Device policies are MAC based and are supplemented with current IPv4/IPv6
+# addresses so routed WAN traffic is shaped correctly on OpenWrt/firewall4.
+
+NAME=myeqosplus
+ACTION=${1:-status}
+ARG=${2:-}
+OWNER_DIR=/var/run/$NAME
+LOCK_DIR=/var/lock/$NAME
+IDLIST=/var/$NAME.idlist
+LOG=/var/log/$NAME.log
+FLOW_STATE=$OWNER_DIR/flow-offloading.state
+DEVICE_CURRENT=$OWNER_DIR/devices.current
+POLICY_STATE=$OWNER_DIR/policy.state
+
+# Files below are ownership markers.  Never remove a qdisc or ingress
+# hook unless this instance created it.
+OWNED_INGRESS=$OWNER_DIR/owned_ingress
+
+mkdir -p "$OWNER_DIR" /var/lock /var 2>/dev/null || exit 1
+command -v uci >/dev/null 2>&1 || { echo 'ERROR: uci is required' >&2; exit 1; }
+TC=$(command -v tc 2>/dev/null)
+IP=$(command -v ip 2>/dev/null)
+NFT=$(command -v nft 2>/dev/null)
+JSONFILTER=$(command -v jsonfilter 2>/dev/null)
+[ -n "$TC" ] && [ -n "$IP" ] || { echo 'ERROR: ip/tc is required' >&2; exit 1; }
+
+cfg() { uci -q get "$NAME.main.$1" 2>/dev/null; }
+log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
+valid_mac() { printf '%s' "$1" | grep -Eq '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'; }
+positive() { case "$1" in ''|*[!0-9]*|0) return 1 ;; *) return 0 ;; esac; }
+sanitize_rate() { case "$1" in ''|*[!0-9]*) echo 0 ;; *) echo "$1" ;; esac; }
+to_kbit() { case "$1" in ''|*[!0-9.]*) echo 0 ;; *) awk -v v="$1" 'BEGIN { printf "%.0f\n", v * 8192 }' ;; esac; }
+root_rate() { case "$(cfg "$1")" in ''|*[!0-9]*|0) echo 1000000 ;; *) echo "$(cfg "$1")" ;; esac; }
+
+resolve_dev() {
+	local configured network status value
+	DEV=
+	configured=$(cfg ifname)
+	network=$(cfg wan_network); [ -n "$network" ] || network=wan
+
+	# An explicit Linux netdev is accepted.  "1", "auto", "wan" and
+	# "wan6" retain compatibility with older configurations and trigger
+	# network-interface resolution instead of accidentally shaping br-lan.
+	case "$configured" in
+		''|1|auto|wan|wan6) ;;
+		*)
+			if "$IP" link show dev "$configured" >/dev/null 2>&1; then
+				DEV=$configured
+				return 0
+			fi
+		;;
+	esac
+
+	if command -v ubus >/dev/null 2>&1 && [ -n "$JSONFILTER" ]; then
+		status=$(ubus call "network.interface.$network" status 2>/dev/null)
+		for value in '@.l3_device' '@.device' '@.pbridge'; do
+			DEV=$(printf '%s' "$status" | "$JSONFILTER" -e "$value" 2>/dev/null)
+			[ -n "$DEV" ] && return 0
+		done
+	fi
+
+	DEV=$(uci -q get "network.$network.device" 2>/dev/null)
+	[ -n "$DEV" ] || DEV=$(uci -q get "network.$network.ifname" 2>/dev/null)
+	[ -n "$DEV" ] || DEV=
+}
+
+resolve_dev
+[ -n "$DEV" ] && IFB=${DEV}_ifb || IFB=
+
+release_lock() {
+	[ -f "$LOCK_DIR/pid" ] || return 0
+	[ "$(cat "$LOCK_DIR/pid" 2>/dev/null)" = "$$" ] || return 0
+	rm -f "$LOCK_DIR/pid"
+	rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+
+acquire_lock() {
+	local pid
+	if mkdir "$LOCK_DIR" 2>/dev/null; then
+		echo $$ > "$LOCK_DIR/pid"
+		trap 'release_lock' EXIT
+		return 0
+	fi
+	pid=$(cat "$LOCK_DIR/pid" 2>/dev/null)
+	if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+		rm -f "$LOCK_DIR/pid"
+		rmdir "$LOCK_DIR" 2>/dev/null || true
+		mkdir "$LOCK_DIR" 2>/dev/null || return 1
+		echo $$ > "$LOCK_DIR/pid"
+		trap 'release_lock' EXIT
+		return 0
+	fi
+	echo "ERROR: $NAME is busy${pid:+ (pid $pid)}" >&2
+	return 1
+}
+
+root_qdisc() { "$TC" qdisc show dev "$1" 2>/dev/null | sed -n '/ root /{p;q;}'; }
+ingress_qdisc() { "$TC" qdisc show dev "$1" 2>/dev/null | sed -n '/ parent ffff:/p'; }
+owned_root() { [ -f "$OWNER_DIR/$1" ] && root_qdisc "$1" | grep -q 'qdisc htb 1:'; }
+
+check_root_ownership() {
+	local q policy preserve ingress unmanaged_root=0
+	[ -n "$DEV" ] || { echo 'ERROR: WAN shaping device could not be resolved; refusing to use br-lan as fallback' >&2; return 1; }
+	q=$(root_qdisc "$DEV")
+	policy=$(cfg multiqueue_policy); [ -n "$policy" ] || policy=refuse
+	preserve=$(cfg preserve_existing_qdisc); [ "$preserve" = 0 ] && policy=takeover
+	if [ -n "$q" ] && ! owned_root "$DEV"; then
+		printf '%s\n' "$q" | grep -q 'qdisc noqueue ' || unmanaged_root=1
+	fi
+	if [ "$unmanaged_root" -eq 1 ]; then
+		if [ "$policy" = takeover ]; then
+			echo "WARNING: taking over existing root qdisc on $DEV: $q" >&2
+		else
+			case "$q" in
+				*'qdisc mq '*) echo "ERROR: $DEV uses mq; refusing to collapse multiqueue root (set myeqosplus.main.multiqueue_policy=takeover explicitly)" >&2 ;;
+				*) echo "ERROR: $DEV already has an unmanaged root qdisc: $q" >&2 ;;
+			 esac
+			return 1
+		fi
+	fi
+
+	ingress=$(ingress_qdisc "$DEV")
+	if [ -n "$ingress" ] && [ ! -f "$OWNED_INGRESS" ]; then
+		if [ "$policy" != takeover ]; then
+			echo "ERROR: $DEV already has an unmanaged ingress qdisc; refusing to replace it" >&2
+			return 1
+		fi
+		echo "WARNING: taking over existing ingress qdisc on $DEV: $ingress" >&2
+	fi
+	return 0
+}
+
+save_flow_offloading() {
+	[ "$(cfg manage_flow_offloading)" = 1 ] || return 0
+	[ -f "$FLOW_STATE" ] && return 0
+	local option value found=0 state_new=$FLOW_STATE.new
+	: > "$state_new" || return 1
+	printf '# saved by %s\n' "$NAME" > "$state_new"
+	for option in flow_offloading flow_offloading_hw; do
+		if value=$(uci -q get "firewall.@defaults[0].$option" 2>/dev/null); then
+			printf '%s=%s\n' "$option" "$value" >> "$state_new"
+			found=1
+		else
+			printf '%s=__unset__\n' "$option" >> "$state_new"
+		fi
+	done
+	[ "$found" -eq 1 ] || { rm -f "$state_new"; return 0; }
+	mv "$state_new" "$FLOW_STATE" || { rm -f "$state_new"; return 1; }
+	for option in flow_offloading flow_offloading_hw; do
+		if uci -q get "firewall.@defaults[0].$option" >/dev/null 2>&1; then
+			uci -q set "firewall.@defaults[0].$option=0" || { restore_flow_offloading; return 1; }
+		fi
+	done
+	uci -q commit firewall || { restore_flow_offloading; return 1; }
+	if [ -x /etc/init.d/firewall ]; then
+		/etc/init.d/firewall reload >/dev/null 2>&1 || { restore_flow_offloading; return 1; }
+	fi
+	return 0
+}
+
+restore_flow_offloading() {
+	[ -f "$FLOW_STATE" ] || return 0
+	local option value
+	while IFS='=' read -r option value; do
+		case "$option" in
+			flow_offloading|flow_offloading_hw)
+				if [ "$value" = __unset__ ]; then
+					uci -q delete "firewall.@defaults[0].$option" || true
+				else
+					uci -q set "firewall.@defaults[0].$option=$value" || true
+				fi
+			;;
+		esac
+	done < "$FLOW_STATE"
+	uci -q commit firewall 2>/dev/null || true
+	if [ -x /etc/init.d/firewall ]; then
+		/etc/init.d/firewall reload >/dev/null 2>&1 || true
+	fi
+	rm -f "$FLOW_STATE"
+}
+
+remove_nft_rule_matches() {
+	[ -n "$NFT" ] || return 0
+	local chain value line handle
+	value=$1
+	for chain in mark_forward mark_output mark_postrouting; do
+		"$NFT" -a list chain inet "$NAME" "$chain" 2>/dev/null | while IFS= read -r line; do
+			case "$line" in *"$value"*)
+				handle=$(printf '%s\n' "$line" | sed -n 's/.* handle \([0-9][0-9]*\).*/\1/p')
+				[ -n "$handle" ] && "$NFT" delete rule inet "$NAME" "$chain" handle "$handle" 2>/dev/null || true
+			esac
+		done
+	done
+}
+
+known_ips_for_mac() {
+	local mac=$1
+	[ -r "$DEVICE_CURRENT" ] || return 0
+	awk -F '\t' -v mac="$mac" '$1 == mac && $9 == "1" { print $3; print $4; }' "$DEVICE_CURRENT" |
+		tr ',' '\n' | sed '/^$/d' | sort -u
+}
+
+remove_policy_rules() {
+	local value
+	for value in "$@"; do
+		[ -n "$value" ] && remove_nft_rule_matches "$value"
+	done
+}
+
+stop_qos() {
+	local target_dev target_ifb owned_dev=0 owned_ifb=0 owned_ingress=0
+	target_dev=$(cat "$OWNER_DIR/owned_dev" 2>/dev/null)
+	target_ifb=$(cat "$OWNER_DIR/owned_ifb" 2>/dev/null)
+	[ -n "$target_dev" ] || target_dev=$DEV
+	[ -n "$target_ifb" ] || target_ifb=$IFB
+	owned_root "$target_dev" && owned_dev=1
+	owned_root "$target_ifb" && owned_ifb=1
+	[ -f "$OWNED_INGRESS" ] && owned_ingress=1
+	if [ "$owned_dev" -eq 1 ]; then
+		"$TC" qdisc del dev "$target_dev" root 2>/dev/null || true
+		rm -f "$OWNER_DIR/$target_dev"
+	fi
+	# Never delete an ingress qdisc just because it exists: SQM, firewall
+	# helpers and other applications may own it.  Only remove our marker.
+	if [ "$owned_ingress" -eq 1 ]; then
+		"$TC" qdisc del dev "$target_dev" ingress 2>/dev/null || true
+		rm -f "$OWNED_INGRESS"
+	fi
+	if [ "$owned_ifb" -eq 1 ]; then
+		"$TC" qdisc del dev "$target_ifb" root 2>/dev/null || true
+		"$IP" link del dev "$target_ifb" 2>/dev/null || true
+		rm -f "$OWNER_DIR/$target_ifb"
+	fi
+	if [ -n "$NFT" ] && { [ -f "$OWNER_DIR/nft" ] || [ "$owned_dev" -eq 1 ] || [ "$owned_ifb" -eq 1 ]; }; then
+		"$NFT" delete table inet "$NAME" 2>/dev/null || true
+		"$NFT" delete table bridge "$NAME" 2>/dev/null || true
+		rm -f "$OWNER_DIR/nft"
+	fi
+	rm -f "$OWNER_DIR/owned_dev" "$OWNER_DIR/owned_ifb" "$IDLIST"
+	restore_flow_offloading
+	return 0
+}
+
+init_qosplus() {
+	[ -n "$DEV" ] || { echo 'ERROR: no WAN shaping device resolved; set myeqosplus.main.ifname explicitly' >&2; return 1; }
+	[ -n "$IFB" ] || { echo 'ERROR: IFB device name is empty' >&2; return 1; }
+	[ -n "$NFT" ] || { echo 'ERROR: nft is required for IPv4/IPv6 marking' >&2; return 1; }
+	check_root_ownership || return 1
+	command -v insmod >/dev/null 2>&1 && {
+		insmod sch_htb 2>/dev/null || true
+		insmod sch_sfq 2>/dev/null || true
+		insmod act_mirred 2>/dev/null || true
+		insmod ifb 2>/dev/null || true
+	}
+	save_flow_offloading || return 1
+	# Never delete an IFB that belongs to another service. A stale marker
+	# from a previous interrupted instance is safe to reclaim; an unmarked
+	# interface is not.
+	if "$IP" link show dev "$IFB" >/dev/null 2>&1; then
+		if [ ! -f "$OWNER_DIR/owned_ifb" ]; then
+			echo "ERROR: IFB $IFB already exists and is not owned by $NAME" >&2
+			restore_flow_offloading
+			return 1
+		fi
+		"$IP" link del dev "$IFB" 2>/dev/null || { echo "ERROR: unable to remove stale IFB $IFB" >&2; restore_flow_offloading; return 1; }
+	fi
+	"$IP" link add dev "$IFB" type ifb || { restore_flow_offloading; return 1; }
+	"$IP" link set dev "$IFB" up || { "$IP" link del dev "$IFB" 2>/dev/null; restore_flow_offloading; return 1; }
+	"$TC" qdisc del dev "$DEV" root 2>/dev/null || true
+	ROOT_UL=$(root_rate upload_ceiling_kbit)
+	ROOT_DL=$(root_rate download_ceiling_kbit)
+	"$TC" qdisc add dev "$DEV" root handle 1: htb default 1 || { "$IP" link del dev "$IFB" 2>/dev/null; restore_flow_offloading; return 1; }
+	touch "$OWNER_DIR/$DEV" "$OWNER_DIR/owned_dev"
+	printf '%s\n' "$DEV" > "$OWNER_DIR/owned_dev"
+	"$TC" class add dev "$DEV" parent 1: classid 1:1 htb rate "${ROOT_UL}kbit" ceil "${ROOT_UL}kbit" || { stop_qos; return 1; }
+	"$TC" qdisc add dev "$IFB" root handle 1: htb default 1 || { stop_qos; return 1; }
+	touch "$OWNER_DIR/$IFB" "$OWNER_DIR/owned_ifb"
+	printf '%s\n' "$IFB" > "$OWNER_DIR/owned_ifb"
+	"$TC" class add dev "$IFB" parent 1: classid 1:1 htb rate "${ROOT_DL}kbit" ceil "${ROOT_DL}kbit" || { stop_qos; return 1; }
+	# The ingress hook is shared kernel state.  Only replace it after the
+	# explicit takeover check above, and record ownership for safe cleanup.
+	if [ -n "$(ingress_qdisc "$DEV")" ]; then
+		"$TC" qdisc del dev "$DEV" ingress 2>/dev/null || { stop_qos; return 1; }
+	fi
+	"$TC" qdisc add dev "$DEV" ingress || { stop_qos; return 1; }
+	touch "$OWNED_INGRESS"
+	"$TC" filter add dev "$DEV" parent ffff: protocol all prio 2 u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev "$IFB" || { stop_qos; return 1; }
+	"$NFT" delete table inet "$NAME" 2>/dev/null || true
+	"$NFT" add table inet "$NAME" || { stop_qos; return 1; }
+	"$NFT" add chain inet "$NAME" mark_forward '{ type filter hook forward priority -200; policy accept; }' || { stop_qos; return 1; }
+	"$NFT" add chain inet "$NAME" mark_output '{ type filter hook output priority -200; policy accept; }' || { stop_qos; return 1; }
+	"$NFT" add chain inet "$NAME" mark_postrouting '{ type filter hook postrouting priority -200; policy accept; }' || { stop_qos; return 1; }
+	touch "$OWNER_DIR/nft"
+	return 0
+}
+
+add_mark_mac() {
+	local mac=$1 id=$2 chain
+	for chain in mark_forward mark_output mark_postrouting; do
+		"$NFT" add rule inet "$NAME" "$chain" ether saddr "$mac" counter meta mark set "$id" || return 1
+		"$NFT" add rule inet "$NAME" "$chain" ether daddr "$mac" counter meta mark set "$id" || return 1
+	done
+}
+
+add_mark_ip() {
+	local address=$1 id=$2 family=ip chain
+	printf '%s' "$address" | grep -q ':' && family=ip6
+	for chain in mark_forward mark_output mark_postrouting; do
+		"$NFT" add rule inet "$NAME" "$chain" "$family" saddr "$address" counter meta mark set "$id" || return 1
+		"$NFT" add rule inet "$NAME" "$chain" "$family" daddr "$address" counter meta mark set "$id" || return 1
+	done
+}
+
+add_mark_known_ips() {
+	local mac=$1 id=$2 address prefix
+	for address in $(known_ips_for_mac "$mac"); do
+		# Both IPv4 and IPv6 addresses discovered from the neighbour table
+		# must be marked. Older code accidentally skipped every IPv6 entry.
+		case "$address" in
+			''|*%*|*/*) continue ;;
+		esac
+		prefix=32
+		printf '%s' "$address" | grep -q ':' && prefix=128
+		add_mark_ip "$address/$prefix" "$id" || return 1
+	done
+	return 0
+}
+
+add_mac() {
+	local index=$1 id=$((index * 10 + 1000)) mac
+	mac=$(uci -q get "$NAME.@device[$index].mac" 2>/dev/null | tr 'a-f' 'A-F')
+	valid_mac "$mac" || return 1
+	[ "$DL" -gt 0 ] || [ "$UL" -gt 0 ] || { echo "ERROR: policy $index has both rates set to zero" >&2; return 1; }
+	add_mark_mac "$mac" "$id" || { remove_policy_rules "$mac"; return 1; }
+	add_mark_known_ips "$mac" "$id" || { remove_policy_rules "$mac" $(known_ips_for_mac "$mac"); return 1; }
+	if positive "$DL"; then
+		"$TC" class add dev "$IFB" parent 1:1 classid 1:$id htb rate "${DL}kbit" ceil "${DL}kbit" prio "$id" burst 15k cburst 15k || { delete_id "$index"; return 1; }
+		"$TC" qdisc add dev "$IFB" parent 1:$id handle "$id": sfq perturb 10 || { delete_id "$index"; return 1; }
+		"$TC" filter add dev "$IFB" parent 1: protocol all prio "$id" handle "$id" fw flowid 1:$id || { delete_id "$index"; return 1; }
+	fi
+	if positive "$UL"; then
+		"$TC" class add dev "$DEV" parent 1:1 classid 1:$id htb rate "${UL}kbit" ceil "${UL}kbit" prio "$id" burst 15k cburst 15k || { delete_id "$index"; return 1; }
+		"$TC" qdisc add dev "$DEV" parent 1:$id handle "$id": sfq perturb 10 || { delete_id "$index"; return 1; }
+		"$TC" filter add dev "$DEV" parent 1: protocol all prio "$id" handle "$id" fw flowid 1:$id || { delete_id "$index"; return 1; }
+	fi
+	return 0
+}
+
+add_ip() {
+	local index=$1 id=$((index * 10 + 1000)) address prefix
+	address=$(uci -q get "$NAME.@device[$index].address" 2>/dev/null)
+	[ -n "$address" ] || address=$(uci -q get "$NAME.@device[$index].ip" 2>/dev/null)
+	[ -n "$address" ] || return 1
+	[ "$DL" -gt 0 ] || [ "$UL" -gt 0 ] || { echo "ERROR: policy $index has both rates set to zero" >&2; return 1; }
+	prefix=$(printf '%s' "$address" | awk -F/ '{print $2}')
+	[ -n "$prefix" ] || { printf '%s' "$address" | grep -q ':' && prefix=128 || prefix=32; }
+	address=${address%/*}
+	add_mark_ip "$address/$prefix" "$id" || { remove_policy_rules "$address"; return 1; }
+	if positive "$DL"; then
+		"$TC" class add dev "$IFB" parent 1:1 classid 1:$id htb rate "${DL}kbit" ceil "${DL}kbit" prio "$id" burst 15k cburst 15k || { delete_id "$index"; return 1; }
+		"$TC" qdisc add dev "$IFB" parent 1:$id handle "$id": sfq perturb 10 || { delete_id "$index"; return 1; }
+		"$TC" filter add dev "$IFB" parent 1: protocol all prio "$id" handle "$id" fw flowid 1:$id || { delete_id "$index"; return 1; }
+	fi
+	if positive "$UL"; then
+		"$TC" class add dev "$DEV" parent 1:1 classid 1:$id htb rate "${UL}kbit" ceil "${UL}kbit" prio "$id" burst 15k cburst 15k || { delete_id "$index"; return 1; }
+		"$TC" qdisc add dev "$DEV" parent 1:$id handle "$id": sfq perturb 10 || { delete_id "$index"; return 1; }
+		"$TC" filter add dev "$DEV" parent 1: protocol all prio "$id" handle "$id" fw flowid 1:$id || { delete_id "$index"; return 1; }
+	fi
+	return 0
+}
+
+delete_id() {
+	local index=$1 id=$((index * 10 + 1000)) mac address
+	mac=$(uci -q get "$NAME.@device[$index].mac" 2>/dev/null | tr 'a-f' 'A-F')
+	address=$(uci -q get "$NAME.@device[$index].address" 2>/dev/null)
+	[ -n "$address" ] || address=$(uci -q get "$NAME.@device[$index].ip" 2>/dev/null)
+	"$TC" filter del dev "$DEV" parent 1: handle "$id" fw 2>/dev/null || true
+	"$TC" filter del dev "$IFB" parent 1: handle "$id" fw 2>/dev/null || true
+	"$TC" class del dev "$DEV" parent 1:1 classid 1:$id 2>/dev/null || true
+	"$TC" class del dev "$IFB" parent 1:1 classid 1:$id 2>/dev/null || true
+	[ -n "$NFT" ] && { [ -n "$mac" ] && valid_mac "$mac" && remove_policy_rules "$mac" $(known_ips_for_mac "$mac"); [ -n "$address" ] && remove_policy_rules "${address%/*}"; }
+}
+
+device_indices() {
+	uci -q show "$NAME" 2>/dev/null | sed -n "s/^$NAME\.@device\[\([0-9][0-9]*\)\]\.enable='1'.*/\1/p" | sort -nu
+}
+
+clock_minutes() {
+	local h=${1%:*} m=${1#*:}
+	h=${h#0}; m=${m#0}; [ -n "$h" ] || h=0; [ -n "$m" ] || m=0
+	echo $((h * 60 + m))
+}
+
+check_time() {
+	local start=$1 end=$2 now sm em cm
+	if [ -z "$start" ] || [ -z "$end" ]; then return 0; fi
+	[ "$start" = "$end" ] && return 0
+	now=$(date +%H:%M); sm=$(clock_minutes "$start"); em=$(clock_minutes "$end"); cm=$(clock_minutes "$now")
+	if [ "$sm" -lt "$em" ]; then
+		[ "$cm" -ge "$sm" ] && [ "$cm" -lt "$em" ]
+	else
+		[ "$cm" -ge "$sm" ] || [ "$cm" -lt "$em" ]
+	fi
+}
+
+check_schedule() {
+	local i=$1 day start end week today matched=0
+	start=$(uci -q get "$NAME.@device[$i].timestart" 2>/dev/null)
+	end=$(uci -q get "$NAME.@device[$i].timeend" 2>/dev/null)
+	week=$(uci -q get "$NAME.@device[$i].week" 2>/dev/null)
+	today=$(date +%u)
+	if [ -n "$week" ] && [ "$week" != 0 ]; then
+		for day in $(printf '%s' "$week" | tr ',' ' '); do [ "$day" = "$today" ] && matched=1; done
+		[ "$matched" -eq 1 ] || return 1
+	fi
+	check_time "$start" "$end"
+}
+
+load_rates() {
+	local i=$1 dl ul olddl oldul
+	dl=$(uci -q get "$NAME.@device[$i].download_kbit" 2>/dev/null)
+	ul=$(uci -q get "$NAME.@device[$i].upload_kbit" 2>/dev/null)
+	olddl=$(uci -q get "$NAME.@device[$i].download" 2>/dev/null)
+	oldul=$(uci -q get "$NAME.@device[$i].upload" 2>/dev/null)
+	[ -n "$dl" ] && DL=$(sanitize_rate "$dl") || DL=$(to_kbit "$olddl")
+	[ -n "$ul" ] && UL=$(sanitize_rate "$ul") || UL=$(to_kbit "$oldul")
+}
+
+# Return only state which affects nft marks or tc classes. The inventory
+# file contains timestamps, so comparing it directly would rebuild qdiscs on
+# every refresh. This fingerprint lets the lightweight updater notice a new
+# IPv4/IPv6 address without causing needless qdisc churn.
+policy_fingerprint() {
+	local i mac address
+	for i in $(device_indices); do
+		mac=$(uci -q get "$NAME.@device[$i].mac" 2>/dev/null | tr 'a-f' 'A-F')
+		address=$(uci -q get "$NAME.@device[$i].address" 2>/dev/null)
+		[ -n "$address" ] || address=$(uci -q get "$NAME.@device[$i].ip" 2>/dev/null)
+		printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+			"$i" "$mac" "$address" \
+			"$(uci -q get "$NAME.@device[$i].download_kbit" 2>/dev/null)" \
+			"$(uci -q get "$NAME.@device[$i].upload_kbit" 2>/dev/null)" \
+			"$(uci -q get "$NAME.@device[$i].timestart" 2>/dev/null)" \
+			"$(uci -q get "$NAME.@device[$i].timeend" 2>/dev/null)" \
+			"$(uci -q get "$NAME.@device[$i].week" 2>/dev/null)" \
+			"$(uci -q get "$NAME.@device[$i].enable" 2>/dev/null)"
+		if valid_mac "$mac"; then
+			known_ips_for_mac "$mac" | sort -u | sed 's/^/ip|/'
+		fi
+	done | sort
+}
+
+save_policy_fingerprint() {
+	local tmp=$POLICY_STATE.new
+	policy_fingerprint > "$tmp" || { rm -f "$tmp"; return 1; }
+	mv "$tmp" "$POLICY_STATE"
+}
+
+start_qos() {
+	[ "$(cfg enabled)" = 1 ] || { stop_qos; save_policy_fingerprint; log 'service disabled; no qdisc applied'; return 0; }
+	stop_qos >/dev/null 2>&1
+	local indices i active=0 active_indices=
+	indices=$(device_indices)
+	[ -n "$indices" ] || { save_policy_fingerprint; log 'no enabled policies; no qdisc applied'; return 0; }
+	for i in $indices; do check_schedule "$i" && active_indices="$active_indices $i"; done
+	[ -n "$active_indices" ] || { save_policy_fingerprint; log 'no policies active in the current schedule'; return 0; }
+	init_qosplus || return 1
+	: > "$IDLIST"
+	for i in $active_indices; do
+		load_rates "$i"
+		mac=$(uci -q get "$NAME.@device[$i].mac" 2>/dev/null)
+		if valid_mac "$mac"; then add_mac "$i" || { log "failed to apply MAC policy index=$i"; stop_qos; return 1; }
+		else
+			add_ip "$i" || { log "failed to apply IP policy index=$i"; stop_qos; return 1; }
+		fi
+		active=$((active + 1)); printf '!%s!\n' "$i" >> "$IDLIST"
+	done
+	save_policy_fingerprint || { log 'WARNING: unable to save policy fingerprint'; }
+	log "service started: interface=$DEV active_policies=$active"
+	return 0
+}
+expected_ids() {
+	local i
+	for i in $(device_indices); do
+		check_schedule "$i" && printf '!%s!\n' "$i"
+	done
+}
+
+sync_qos() {
+	[ "$(cfg enabled)" = 1 ] || { stop_qos; return 0; }
+	local expected="/var/run/$NAME/expected.$$" expected_current state="/var/run/$NAME/policy-state.$$" state_current
+	expected_current=$expected.current
+	state_current=$state.current
+	expected_ids | sort > "$expected"
+	sort "$IDLIST" 2>/dev/null > "$expected_current" || :
+	policy_fingerprint > "$state" || :
+	if command -v cmp >/dev/null 2>&1; then
+		cmp -s "$expected" "$expected_current" || { rm -f "$expected" "$expected_current" "$state"; start_qos; return $?; }
+		if [ -f "$POLICY_STATE" ]; then
+			cmp -s "$state" "$POLICY_STATE" || { rm -f "$expected" "$expected_current" "$state"; start_qos; return $?; }
+		else
+			rm -f "$expected" "$expected_current" "$state"
+			start_qos
+			return $?
+		fi
+	else
+		state_current=$(cat "$state" 2>/dev/null)
+		if [ "$(cat "$expected" 2>/dev/null)" != "$(cat "$expected_current" 2>/dev/null)" ] || [ "$state_current" != "$(cat "$POLICY_STATE" 2>/dev/null)" ]; then
+			rm -f "$expected" "$expected_current" "$state"
+			start_qos
+			return $?
+		fi
+	fi
+	rm -f "$expected" "$expected_current" "$state"
+	return 0
+}
+status_json() {
+	local enabled=0 running=0 nftables=0 upload_tc=0 download_tc=0 flow_saved=0 active=0
+	[ "$(cfg enabled)" = 1 ] && enabled=1
+	owned_root "$DEV" && running=1
+	[ -n "$NFT" ] && "$NFT" list table inet "$NAME" >/dev/null 2>&1 && nftables=1
+	"$TC" class show dev "$DEV" 2>/dev/null | grep -q 'class htb 1:' && upload_tc=1
+	"$TC" class show dev "$IFB" 2>/dev/null | grep -q 'class htb 1:' && download_tc=1
+	[ -f "$FLOW_STATE" ] && flow_saved=1
+	[ -f "$IDLIST" ] && active=$(grep -c '^![0-9][0-9]*!$' "$IDLIST" 2>/dev/null || true)
+	wan_network=$(cfg wan_network); [ -n "$wan_network" ] || wan_network=wan
+	lan_network=$(cfg lan_network); [ -n "$lan_network" ] || lan_network=lan
+	printf '{"success":true,"enabled":%s,"running":%s,"wan_network":"%s","lan_network":"%s","wan_if":"%s","ifb":"%s","ipv4":true,"ipv6":true,"nftables":%s,"upload_tc":%s,"download_tc":%s,"flow_state_saved":%s,"active_policies":%s}\n' "$enabled" "$running" "$wan_network" "$lan_network" "$DEV" "$IFB" "$nftables" "$upload_tc" "$download_tc" "$flow_saved" "$active"
+}
+
+case "$ACTION" in
+	start|reload|stop|add|del|sync)
+		acquire_lock || exit 1
+		;;
+esac
+
+case "$ACTION" in
+	start|reload) start_qos ;;
+	stop) stop_qos ;;
+	add)
+		[ -n "$ARG" ] || exit 2
+		[ "$(cfg enabled)" = 1 ] || { echo 'ERROR: service is disabled' >&2; exit 1; }
+		owned_root "$DEV" || { init_qosplus || exit 1; : > "$IDLIST"; }
+		load_rates "$ARG"
+		mac=$(uci -q get "$NAME.@device[$ARG].mac" 2>/dev/null)
+		if valid_mac "$mac"; then add_mac "$ARG"; else add_ip "$ARG"; fi
+		;;
+	del) [ -n "$ARG" ] || exit 2; delete_id "$ARG" ;;
+	sync) sync_qos ;;
+	status-json) status_json ;;
+	status)
+		echo "interface=$DEV"; echo "ifb=$IFB"; root_qdisc "$DEV"
+		"$TC" -s class show dev "$DEV" 2>/dev/null
+		"$TC" -s class show dev "$IFB" 2>/dev/null
+		[ -n "$NFT" ] && "$NFT" list table inet "$NAME" 2>/dev/null || true
+		;;
+	*) echo "usage: $0 {start|stop|reload|sync|add INDEX|del INDEX|status|status-json}" >&2; exit 2 ;;
+esac
+

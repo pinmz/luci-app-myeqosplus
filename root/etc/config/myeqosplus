@@ -1,0 +1,19 @@
+config myeqosplus 'main'
+	option enabled '0'
+	option schema_version '2'
+	option ifname 'auto'
+	option wan_network 'wan'
+	option lan_network 'lan'
+	option multiqueue_policy 'refuse'
+	option preserve_existing_qdisc '1'
+	option manage_flow_offloading '1'
+	option upload_ceiling_kbit '1000000'
+	option download_ceiling_kbit '1000000'
+	option history_retention_days '90'
+	option refresh_interval '30'
+
+# Device policies are bound to a MAC and remain while the device is offline.
+# download_kbit shapes WAN ingress through IFB; upload_kbit shapes WAN egress.
+
+# Optional import path written by wifihistory-compatible deployments.
+# option wifihistory_file '/var/lib/wifihistory/devices.tsv'

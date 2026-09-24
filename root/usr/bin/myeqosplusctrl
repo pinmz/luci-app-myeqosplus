@@ -1,0 +1,14 @@
+#!/bin/sh
+# Lightweight inventory/schedule refresher. The provider is the only
+# component that owns tc/nftables state and performs schedule reconciliation.
+NAME=myeqosplus
+INTERVAL=$(uci -q get $NAME.main.refresh_interval 2>/dev/null)
+case "$INTERVAL" in ''|*[!0-9]*) INTERVAL=30 ;; esac
+[ "$INTERVAL" -lt 5 ] && INTERVAL=5
+
+while :; do
+	/usr/sbin/myeqosplus-devices refresh >/dev/null 2>&1 || true
+	[ "$(uci -q get $NAME.main.enabled 2>/dev/null)" = 1 ] || exit 0
+	/usr/bin/myeqosplus sync >/dev/null 2>&1 || true
+	sleep "$INTERVAL"
+done

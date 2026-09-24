@@ -1,0 +1,18 @@
+{
+	"luci-app-myeqosplus": {
+		"description": "Grant LuCI access to My eQoS Plus",
+		"read": {
+			"uci": [ "myeqosplus" ],
+			"ubus": {
+				"myeqosplus": [ "devices", "status" ]
+			}
+		},
+		"write": {
+			"uci": [ "myeqosplus" ],
+			"ubus": {
+				"myeqosplus": [ "refresh", "reload", "policy" ]
+			}
+		}
+	}
+}
+

@@ -1,0 +1,7 @@
+#!/bin/sh
+[ "$ACTION" = "ifup" ] || exit 0
+case "$INTERFACE" in
+	wan|wan6|lan)
+		(sleep 5; /etc/init.d/myeqosplus reload) >/dev/null 2>&1 &
+	;;
+esac

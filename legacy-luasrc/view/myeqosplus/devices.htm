@@ -1,0 +1,87 @@
+<%+header%>
+<h2><%:My eQoS Plus%></h2>
+<p class="notice"><%:All currently discovered and historical wired/wireless devices are shown. Policies are bound to MAC address and remain available when a device is offline.%></p>
+<div class="cbi-section">
+	<div class="cbi-section-node">
+		<button class="cbi-button cbi-button-apply" id="refresh"><%:Refresh devices%></button>
+		<a class="cbi-button" href="<%=url("admin/control/myeqosplus/settings")%>"><%:Advanced settings%></a>
+		<span id="summary" class="right"></span>
+	</div>
+</div>
+<div id="message" class="alert-message" style="display:none"></div>
+<div id="devices"><p><%:Loading devices...%></p></div>
+<script type="text/javascript">
+(function() {
+	'use strict';
+	var base = '<%=url("admin/control/myeqosplus")%>';
+	var root = document.getElementById('devices');
+	var message = document.getElementById('message');
+	var summary = document.getElementById('summary');
+	function esc(s) {
+		s = (s === null || s === undefined) ? '' : String(s);
+		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+	}
+	function show(msg, error) {
+		message.textContent = msg || '';
+		message.style.display = msg ? 'block' : 'none';
+		message.className = error ? 'alert-message warning' : 'alert-message success';
+	}
+	function post(data, done) {
+		XHR.post(base + '/policy', data, function(x, data) {
+			if (!data || !data.success) { show((data && data.error) || '<%:Request failed%>', true); return; }
+			show(data.pending ? '<%:Policy saved; waiting for this device to come online.%>' : '<%:Policy saved and service reloaded.%>', false);
+			load();
+		});
+	}
+	function field(name, value, type) {
+		return '<input class="cbi-input" name="' + name + '" value="' + esc(value || '') + '" type="' + (type || 'text') + '">';
+	}
+	function render(data) {
+		var list = data.devices || [];
+		var online = 0;
+		list.forEach(function(d) { if (d.online) online++; });
+		summary.textContent = '<%:Total%>: ' + list.length + '  <%:Online%>: ' + online + '  <%:Offline%>: ' + (list.length - online);
+		if (!list.length) { root.innerHTML = '<p><%:No device has been discovered yet.%></p>'; return; }
+		var html = '<table class="table cbi-section-table"><tr class="tr table-titles"><th><%:State%></th><th><%:Device / MAC%></th><th><%:Addresses%></th><th><%:Sources / interfaces%></th><th><%:Rate policy (kbit/s)%></th><th><%:Action%></th></tr>';
+		list.forEach(function(d, i) {
+			var p = d.policy || {};
+			html += '<tr class="tr">';
+			html += '<td><span class="label ' + (d.online ? 'success' : 'notice') + '">' + (d.online ? '<%:Online%>' : '<%:Offline%>') + '</span>' + (d.pending ? '<br><small><%:pending%></small>' : '') + '</td>';
+			html += '<td><strong>' + esc(d.name || '<%:Unknown device%>') + '</strong><br><code>' + esc(d.mac) + '</code><br><small><%:First seen%>: ' + esc(d.first_seen || '-') + '<br><%:Last seen%>: ' + esc(d.last_seen || '-') + '</small></td>';
+			html += '<td>' + esc(d.ipv4 || '-') + '<br>' + esc(d.ipv6 || '-') + '</td>';
+			html += '<td>' + esc(d.sources || '-') + '<br>' + esc(d.interfaces || '-') + '</td>';
+			html += '<td>' + field('download_kbit', p.download_kbit || '0', 'number') + '<br>' + field('upload_kbit', p.upload_kbit || '0', 'number') + '</td>';
+			html += '<td><label><input name="enabled" type="checkbox" ' + (p.enable ? 'checked' : '') + '> <%:Enabled%></label><br><button class="cbi-button cbi-button-apply save" data-index="' + i + '"><%:Save policy%></button> ' + (p.section ? '<button class="cbi-button cbi-button-remove remove" data-index="' + i + '"><%:Remove%></button>' : '') + '</td>';
+			html += '</tr>';
+			html += '<tr class="tr"><td colspan="6"><details><summary><%:Schedule%></summary><div class="cbi-value-field">' +
+				'<label><%:Start%> ' + field('timestart', p.timestart || '', 'time') + '</label> <label><%:End%> ' + field('timeend', p.timeend || '', 'time') + '</label> <label><%:Week (1-7, 0=all)%> ' + field('week', p.week || '0', 'text') + '</label> ' +
+				'<input name="name" placeholder="<%:Device name%>" value="' + esc(d.name || p.comment || '') + '"></div></details></td></tr>';
+		});
+		html += '</table>';
+		root.innerHTML = html;
+		Array.prototype.forEach.call(root.querySelectorAll('.save'), function(btn) {
+			btn.onclick = function() {
+				var tr = btn.parentNode.parentNode;
+				var detail = tr.nextElementSibling;
+				var d = list[Number(btn.getAttribute('data-index'))];
+				var p = d.policy || {};
+				post({ mac: d.mac, name: (detail.querySelector('[name=name]') || {}).value || d.name || '', enabled: tr.querySelector('[name=enabled]').checked ? '1' : '0', download_kbit: tr.querySelector('[name=download_kbit]').value, upload_kbit: tr.querySelector('[name=upload_kbit]').value, timestart: detail.querySelector('[name=timestart]').value, timeend: detail.querySelector('[name=timeend]').value, week: detail.querySelector('[name=week]').value });
+			};
+		});
+		Array.prototype.forEach.call(root.querySelectorAll('.remove'), function(btn) {
+			btn.onclick = function() { var d = list[Number(btn.getAttribute('data-index'))]; if (confirm('<%:Remove this policy?%>')) post({ mac: d.mac, delete: '1' }); };
+		});
+	}
+	function load() {
+		XHR.get(base + '/devices', null, function(x, data) {
+			if (!data || !data.success) { show('<%:Unable to load devices%>', true); return; }
+			render(data);
+		});
+	}
+	document.getElementById('refresh').onclick = function() {
+		XHR.get(base + '/refresh', null, function(x, data) { if (data && data.success) { show('<%:Device list refreshed.%>', false); load(); } else show('<%:Refresh failed%>', true); });
+	};
+	load();
+})();
+</script>
+<%+footer%>

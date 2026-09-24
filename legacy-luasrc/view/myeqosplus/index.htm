@@ -1,0 +1,13 @@
+<% include("cbi/map") %>
+<script type="text/javascript">//<![CDATA[
+	XHR.poll(5, '<%=luci.dispatcher.build_url("admin", "control", "myeqosplus", "status")%>', null,
+		function (x, result) {
+			var status = document.getElementsByClassName('myeqosplus_status')[0];
+			if (!status || !result) return;
+			status.setAttribute("style", "font-weight:bold;");
+			status.setAttribute("color", result.running ? "green" : "red");
+			status.innerHTML = result.running ? '<%=translate("RUNNING")%>' : '<%=translate("NOT RUNNING")%>';
+		}
+	)
+//]]>
+</script>
