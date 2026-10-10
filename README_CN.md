@@ -10,7 +10,7 @@ My eQoS Plus 是基于 `luci-app-eqosplus` 重构的 OpenWrt 25.12 LuCI 应用�
 - 在设备列表中直接设置上传/下载 kbit/s、启用状态和时间计划；
 - 离线设备可以先保存策略，设备再次上线后由轻量后台更新器应用；
 - nftables `inet myeqosplus` 标记同时覆盖 IPv4/IPv6；
-- 默认拒绝接管已有 `mq`、CAKE、SQM 等根 qdisc，显式设置 `multiqueue_policy=takeover` 才接管；
+- 默认保留已有 `mq` 根并对每个硬件子队列建立独立 HTB；CAKE、SQM 等非 `mq` 根 qdisc 仍拒绝接管，显式设置 `multiqueue_policy=takeover` 才允许替换；
 - 启动前保存 firewall4 flow offloading 原值，停止、禁用或失败回滚时恢复；
 - 通过 `/usr/bin/myeqosplus` 统一管理 nftables、tc、IFB 和策略；
 - 通过 `/usr/sbin/myeqosplus-devices` 提供 `refresh/list/status` 设备发现接口。
@@ -48,15 +48,14 @@ config myeqosplus 'main'
         option ifname 'auto'               # 自动解析 WAN L3 设备
         option wan_network 'wan'
         option lan_network 'lan'
-        option wan_network 'wan'
-        option lan_network 'lan'
         option multiqueue_policy 'refuse' # 安全默认值
+        option multiqueue_mode 'preserve' # 保留 mq 根并按硬件子队列限速
         option manage_flow_offloading '1'
         option history_retention_days '90'
         option refresh_interval '30'
 ```
 
-`refuse` 模式发现接口根 qdisc 为 `mq` 或其它未被本服务标记的 qdisc 时会拒绝启动并保留原规则；只有明确设置为 `takeover` 才会删除并替换根 HTB。启动前会保存 flow offloading，停止或异常回滚时恢复。
+`multiqueue_mode=preserve`（默认）发现接口根 qdisc 为 `mq` 时会保留根队列，并按硬件队列数量建立独立 HTB；发现 CAKE、SQM 或其它未被本服务标记的非 `mq` 根 qdisc 时，`multiqueue_policy=refuse` 会拒绝启动，只有明确设置为 `takeover` 才会删除并替换。启动前会保存 flow offloading，停止、禁用或异常回滚时恢复。
 
 ## 设备发现数据
 
@@ -96,3 +95,15 @@ config myeqosplus 'main'
 ```
 
 升级时仅对旧 `/etc/config/eqosplus` 的 `device` 段执行一次迁移，不删除原包的配置和服务。实际部署时请确保不要同时让原包和本包接管同一接口根 qdisc。
+
+## MQ 多队列限速
+
+默认 `multiqueue_mode=preserve`。当 WAN 设备已有 `mq` 根 qdisc 时，本包不会删除或塌缩根队列，而是：
+
+- 读取硬件发送队列（`:1`、`:2` 等），为每个子队列安装独立的 HTB；如果 mq 根存在但无法识别任何硬件子队列，则拒绝启动，避免退化成伪多队列；
+- 使用设备 MAC（IP 策略使用地址）稳定哈希到一个硬件队列；
+- 使用 nftables mark + `tc fw` 将设备流量送入对应 HTB；
+- 使用 egress `skbedit queue_mapping` 将上传流量固定到对应 MQ 子队列；
+- 下载方向继续通过 IFB 使用单个 HTB，避免 ingress 方向无法直接选择硬件发送队列。
+
+上传总上限按 `upload_ceiling_kbit / mq 队列数` 分配到各队列，保证所有队列聚合不会超过配置上限；当单设备策略高于所属队列预算时，会安全地限制为该队列预算。设备没有 MQ 根 qdisc 时才使用单 HTB 根；已有 CAKE、SQM 或其它非 `mq` 根默认拒绝接管，只有显式设置 `multiqueue_policy=takeover` 才会替换。设置 `multiqueue_mode=single` 可强制单队列。停止、禁用或启动失败时只清理由本包创建的子队列、过滤器和 clsact，并尽可能恢复原 MQ 子 qdisc 及其参数。

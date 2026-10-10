@@ -4,7 +4,7 @@ My eQoS Plus is an isolated OpenWrt 25.12 LuCI package derived from luci-app-eqo
 
 Policies are bound to normalized MAC addresses, so IPv4/IPv6 changes and offline periods do not lose a device policy. The LuCI device page lets users configure upload/download limits, schedules and enable state directly on each device.
 
-The package uses the `myeqosplus` namespace for its UCI config, init script, provider, nftables table, controller, view and ACL. Existing root qdiscs are protected by default: `mq`, CAKE, SQM and other unmanaged qdiscs require an explicit `multiqueue_policy=takeover` choice. Firewall4 flow-offloading values are saved before QoS activation and restored on stop or failure.
+The package uses the `myeqosplus` namespace for its UCI config, init script, provider, nftables table, controller, view and ACL. Existing non-MQ root qdiscs are protected by default. An existing `mq` root is preserved and managed per hardware child queue; CAKE, SQM and other unmanaged non-MQ qdiscs require an explicit `multiqueue_policy=takeover` choice. Firewall4 flow-offloading values are saved before QoS activation and restored on stop or failure.
 
 ## Build
 
@@ -27,3 +27,9 @@ Device discovery commands:
 /usr/sbin/myeqosplus-devices status
 /usr/bin/myeqosplus status-json
 ```
+
+## Multi-queue shaping
+
+The default `multiqueue_mode=preserve` keeps an existing WAN `mq` root qdisc. Each hardware child queue gets its own HTB, and a stable MAC/address hash selects the queue for each device policy. If an `mq` root is present but no hardware child queue can be identified, startup fails instead of silently pretending to provide multi-queue shaping. nftables marks and `tc fw` classify traffic into the selected HTB; an egress `skbedit queue_mapping` filter pins upload packets to the same hardware queue. Downloads continue through one IFB HTB.
+
+The upload ceiling is divided by the number of detected MQ queues, so the aggregate cannot exceed `upload_ceiling_kbit`; a device policy above its selected queue budget is safely capped at that queue budget. If the WAN has no MQ root, the service safely falls back to a single HTB root. Set `multiqueue_mode=single` to force single-queue mode. On stop, disable, or startup failure only resources owned by this package are removed and the original MQ child qdiscs are restored.

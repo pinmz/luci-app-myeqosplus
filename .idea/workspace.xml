@@ -4,25 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.github/workflows/main.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/main.yml" afterDir="false" />
+    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="更新项目">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README_CN.md" beforeDir="false" afterPath="$PROJECT_DIR$/README_CN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/luasrc/controller/eqosplus.lua" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/luasrc/model/cbi/eqosplus.lua" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/luasrc/view/eqosplus/eqosplus.htm" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/luasrc/view/eqosplus/index.htm" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/po/templates/eqosplus.pot" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/po/zh-cn/eqosplus.po" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/po/zh_Hans/eqosplus.po" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/etc/config/eqosplus" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/etc/hotplug.d/iface/10-eqosplus" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/etc/init.d/eqosplus" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/etc/uci-defaults/luci-eqosplus" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/bin/eqosplus" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/bin/eqosplusctrl" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/share/rpcd/acl.d/luci-app-eqosplus.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/settings.js" beforeDir="false" afterPath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/settings.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/etc/config/myeqosplus" beforeDir="false" afterPath="$PROJECT_DIR$/root/etc/config/myeqosplus" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/usr/bin/myeqosplus" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/bin/myeqosplus" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -87,11 +76,24 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1790220611140</updated>
-      <workItem from="1790220612510" duration="5652000" />
+      <workItem from="1790220612510" duration="11475000" />
     </task>
+    <task id="LOCAL-00001" summary="更新项目">
+      <option name="closed" value="true" />
+      <created>1790235743878</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1790235743878</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="更新项目" />
+    <option name="LAST_COMMIT_MESSAGE" value="更新项目" />
   </component>
 </project>

@@ -34,9 +34,16 @@ return view.extend({
 		o.placeholder = 'auto';
 		o.rmempty = false;
 
-		o = s.option(form.ListValue, 'multiqueue_policy', _('Existing root qdisc'), _('Refuse is recommended. Takeover explicitly replaces the existing root qdisc and may collapse mq to a single HTB root.'));
+		o = s.option(form.ListValue, 'multiqueue_policy', _('Existing root qdisc'), _('Controls takeover of an unmanaged root or ingress qdisc. Preserve mode can shape an existing mq root without deleting it.'));
 		o.value('refuse', _('Refuse takeover (recommended)'));
 		o.value('takeover', _('Allow takeover'));
+		o.rmempty = false;
+
+		o = s.option(form.ListValue, 'multiqueue_mode', _('Queue mode'), _('Preserve an existing mq root and apply a deterministic hardware-queue HTB to each child queue.'));
+		o.value('preserve', _('Preserve MQ with per-queue HTB'));
+		o.value('auto', _('Auto'));
+		o.value('single', _('Single HTB root'));
+		o.default = 'preserve';
 		o.rmempty = false;
 
 		o = s.option(form.Flag, 'preserve_existing_qdisc', _('Protect unmanaged qdisc'));
