@@ -1,6 +1,6 @@
 {
 	"admin/control": {
-		"title": "Control",
+		"title": "控制",
 		"order": 44,
 		"action": {
 			"type": "firstchild",
@@ -8,35 +8,41 @@
 		}
 	},
 	"admin/control/myeqosplus": {
-		"title": "My eQoS Plus",
+		"title": "设备限速增强版",
 		"order": 10,
 		"action": {
 			"type": "firstchild"
 		},
 		"depends": {
-			"acl": [ "luci-app-myeqosplus" ]
+			"acl": [
+				"luci-app-myeqosplus"
+			]
 		}
 	},
 	"admin/control/myeqosplus/devices": {
-		"title": "Devices",
+		"title": "设备",
 		"order": 10,
 		"action": {
 			"type": "view",
 			"path": "myeqosplus/devices"
 		},
 		"depends": {
-			"acl": [ "luci-app-myeqosplus" ]
+			"acl": [
+				"luci-app-myeqosplus"
+			]
 		}
 	},
 	"admin/control/myeqosplus/settings": {
-		"title": "Settings",
+		"title": "设置",
 		"order": 20,
 		"action": {
 			"type": "view",
 			"path": "myeqosplus/settings"
 		},
 		"depends": {
-			"acl": [ "luci-app-myeqosplus" ]
+			"acl": [
+				"luci-app-myeqosplus"
+			]
 		}
 	}
 }

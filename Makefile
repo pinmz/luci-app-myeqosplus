@@ -2,12 +2,12 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-myeqosplus
 PKG_VERSION:=2.0.0
-PKG_RELEASE:=10
+PKG_RELEASE:=11
 PKG_MAINTAINER:=My eQoS Plus Team
 PKG_LICENSE:=GPL-2.0-only
 
-LUCI_TITLE:=LuCI support for My eQoS Plus
-LUCI_DESCRIPTION:=Device inventory, Wi-Fi history, wired discovery and IPv4/IPv6 QoS control.
+LUCI_TITLE:=设备限速增强版 LuCI 应用
+LUCI_DESCRIPTION:=提供设备发现、Wi-Fi 历史、有线设备识别以及 IPv4/IPv6 限速管理。
 LUCI_DEPENDS:=+luci-base +ip +ip-bridge +tc +nftables +kmod-ifb +kmod-sched-core +iw +iwinfo +jsonfilter +rpcd +rpcd-mod-ucode +ucode +ucode-mod-fs +ucode-mod-uci +ucode-mod-ubus
 LUCI_PKGARCH:=all
 

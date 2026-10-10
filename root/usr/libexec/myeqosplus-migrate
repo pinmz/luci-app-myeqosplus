@@ -45,7 +45,7 @@ if [ -f /etc/config/$OLD ]; then
 				*)
 					if valid_mac "$raw"; then mode=mac
 					elif valid_ip "$raw"; then mode=address
-					else log "skip $oldsec: unsupported address/range '$raw'"; continue
+					else log "跳过 $oldsec：不支持的地址或范围 '$raw'"; continue
 					fi
 				;;
 			esac

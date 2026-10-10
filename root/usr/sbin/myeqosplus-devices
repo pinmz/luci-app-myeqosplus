@@ -244,7 +244,7 @@ case "${1:-list}" in
 	refresh) refresh ;;
 	list) refresh && cat "$HISTORY" 2>/dev/null ;;
 	status) refresh && awk -F '\t' 'BEGIN{online=0;total=0} NF>=9 {total++;if($9==1)online++} END{printf "total=%d\tonline=%d\toffline=%d\n",total,online,total-online}' "$HISTORY" ;;
-	*) echo "usage: $0 {refresh|list|status}" >&2; exit 2 ;;
+	*) echo "用法：$0 {refresh|list|status}" >&2; exit 2 ;;
 esac
 
 

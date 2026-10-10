@@ -1,6 +1,6 @@
 {
 	"luci-app-myeqosplus": {
-		"description": "Grant LuCI access to My eQoS Plus",
+		"description": "允许 LuCI 访问设备限速增强版",
 		"read": {
 			"uci": [ "myeqosplus" ],
 			"ubus": {

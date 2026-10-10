@@ -106,7 +106,7 @@ const methods = {
 				parsed = null;
 			}
 
-			return parsed || { success: false, error: 'invalid status' };
+			return parsed || { success: false, error: '状态数据格式无效' };
 		}
 	},
 
@@ -141,7 +141,7 @@ const methods = {
 			let args = request.args || {};
 			let mac = normalize_mac(args.mac);
 			if (!mac)
-				return { success: false, error: 'invalid mac' };
+				return { success: false, error: 'MAC 地址格式无效' };
 
 			let ctx = cursor();
 			let old = find_policy(mac, ctx);
@@ -151,14 +151,14 @@ const methods = {
 					ctx.delete('myeqosplus', old['.name']);
 
 				if (!ctx.commit('myeqosplus'))
-					return { success: false, error: 'unable to commit policy' };
+					return { success: false, error: '无法保存限速策略' };
 
 				let applied = reload_service();
 				return {
 					success: applied,
 					applied: applied,
 					saved: true,
-					error: applied ? '' : 'service reload failed'
+					error: applied ? '' : '服务重载失败'
 				};
 			}
 
@@ -170,11 +170,11 @@ const methods = {
 
 			if (down == null || up == null || (+down == 0 && +up == 0) ||
 			    start == null || end == null || week == null || (!!start != !!end))
-				return { success: false, error: 'invalid policy value' };
+				return { success: false, error: '限速策略参数无效' };
 
 			let section = old ? old['.name'] : ctx.add('myeqosplus', 'device');
 			if (!section)
-				return { success: false, error: 'unable to create policy' };
+				return { success: false, error: '无法创建限速策略' };
 
 			ctx.set('myeqosplus', section, 'mac', mac);
 			ctx.set('myeqosplus', section, 'device_id', replace(mac, /:/g, ''));
@@ -187,14 +187,14 @@ const methods = {
 			ctx.set('myeqosplus', section, 'week', week);
 
 			if (!ctx.commit('myeqosplus'))
-				return { success: false, error: 'unable to commit policy' };
+				return { success: false, error: '无法保存限速策略' };
 
 			let applied = reload_service();
 			return {
 				success: applied,
 				applied: applied,
 				saved: true,
-				error: applied ? '' : 'service reload failed'
+				error: applied ? '' : '服务重载失败'
 			};
 		}
 	}

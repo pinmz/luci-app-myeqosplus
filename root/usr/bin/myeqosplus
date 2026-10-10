@@ -27,12 +27,12 @@ MQ_DEVICE=$OWNER_DIR/mq.device
 MQ_RATE=0
 
 mkdir -p "$OWNER_DIR" /var/lock /var 2>/dev/null || exit 1
-command -v uci >/dev/null 2>&1 || { echo 'ERROR: uci is required' >&2; exit 1; }
+command -v uci >/dev/null 2>&1 || { echo '错误：缺少必需命令 uci' >&2; exit 1; }
 TC=$(command -v tc 2>/dev/null)
 IP=$(command -v ip 2>/dev/null)
 NFT=$(command -v nft 2>/dev/null)
 JSONFILTER=$(command -v jsonfilter 2>/dev/null)
-[ -n "$TC" ] && [ -n "$IP" ] || { echo 'ERROR: ip/tc is required' >&2; exit 1; }
+[ -n "$TC" ] && [ -n "$IP" ] || { echo '错误：缺少必需命令 ip 或 tc' >&2; exit 1; }
 
 cfg() { uci -q get "$NAME.main.$1" 2>/dev/null; }
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
@@ -100,7 +100,7 @@ acquire_lock() {
 		trap 'release_lock' EXIT
 		return 0
 	fi
-	echo "ERROR: $NAME is busy${pid:+ (pid $pid)}" >&2
+	echo "错误：$NAME 正忙${pid:+（进程号 $pid）}" >&2
 	return 1
 }
 
@@ -123,7 +123,7 @@ select_shaper_mode() {
 			MQ_COUNT=$(ls -d /sys/class/net/"$DEV"/queues/tx-* 2>/dev/null | wc -l)
 		fi
 		if [ "$MQ_COUNT" -le 0 ] 2>/dev/null; then
-			echo "ERROR: mq root detected on $DEV but no hardware child queues could be identified" >&2
+			echo "错误：在 $DEV 上检测到 MQ 根队列，但无法识别硬件子队列" >&2
 			return 1
 		fi
 		SHAPER_MODE=mq
@@ -220,7 +220,7 @@ mq_prepare() {
 	rate=$((ROOT_UL / MQ_COUNT))
 	[ "$rate" -gt 0 ] 2>/dev/null || rate=1
 	MQ_RATE=$rate
-	log "MQ enabled: device=$DEV queues=$MQ_COUNT queue_rate=${rate}kbit"
+	log "已启用 MQ：设备=$DEV 队列数=$MQ_COUNT 单队列速率=${rate}kbit"
 	for q in $(seq 1 "$MQ_COUNT"); do
 		handle=$(mq_qdisc_handle "$q")
 		"$TC" qdisc replace dev "$DEV" parent :"$q" handle "$handle:" htb default 1 || return 1
@@ -240,10 +240,10 @@ mq_add_policy() {
 	[ "$class_rate" -gt 0 ] 2>/dev/null || class_rate=$(( $(root_rate upload_ceiling_kbit) / MQ_COUNT ))
 	[ "$class_rate" -gt 0 ] 2>/dev/null || class_rate=1
 	if [ "$rate" -gt "$class_rate" ] 2>/dev/null; then
-		log "policy index=$index queue=$queue requested=${rate}kbit capped=${class_rate}kbit"
+		log "限速策略：序号=$index 队列=$queue 请求速率=${rate}kbit 实际上限=${class_rate}kbit"
 		rate=$class_rate
 	fi
-	log "policy index=$index key=$key queue=$queue handle=$handle"
+	log "限速策略：序号=$index 标识=$key 队列=$queue 句柄=$handle"
 	"$TC" class add dev "$DEV" parent "$handle:1" classid "$classid" htb rate "${rate}kbit" ceil "${rate}kbit" prio "$id" burst 15k cburst 15k || return 1
 	"$TC" qdisc add dev "$DEV" parent "$classid" handle "$id:" sfq perturb 10 || {
 		"$TC" class del dev "$DEV" parent "$handle:1" classid "$classid" 2>/dev/null || true
@@ -280,7 +280,7 @@ mq_delete_policy() {
 
 check_root_ownership() {
 	local q policy preserve ingress unmanaged_root=0
-	[ -n "$DEV" ] || { echo 'ERROR: WAN shaping device could not be resolved; refusing to use br-lan as fallback' >&2; return 1; }
+	[ -n "$DEV" ] || { echo '错误：无法解析 WAN 限速设备，已拒绝回退使用 br-lan' >&2; return 1; }
 	q=$(root_qdisc "$DEV")
 	policy=$(cfg multiqueue_policy); [ -n "$policy" ] || policy=refuse
 	preserve=$(cfg preserve_existing_qdisc); [ "$preserve" = 0 ] && policy=takeover
@@ -294,11 +294,11 @@ check_root_ownership() {
 	fi
 	if [ "$unmanaged_root" -eq 1 ]; then
 		if [ "$policy" = takeover ]; then
-			echo "WARNING: taking over existing root qdisc on $DEV: $q" >&2
+			echo "警告：正在接管 $DEV 上已有的根 qdisc：$q" >&2
 		else
 			case "$q" in
-				*'qdisc mq '*) echo "ERROR: $DEV uses mq; set multiqueue_mode=preserve or multiqueue_policy=takeover" >&2 ;;
-				*) echo "ERROR: $DEV already has an unmanaged root qdisc: $q" >&2 ;;
+				*'qdisc mq '*) echo "错误：$DEV 正在使用 MQ；请设置 multiqueue_mode=preserve 或 multiqueue_policy=takeover" >&2 ;;
+				*) echo "错误：$DEV 已有未由本服务管理的根 qdisc：$q" >&2 ;;
 			esac
 			return 1
 		fi
@@ -306,10 +306,10 @@ check_root_ownership() {
 	ingress=$(ingress_qdisc "$DEV")
 	if [ -n "$ingress" ] && [ ! -f "$OWNED_INGRESS" ]; then
 		if [ "$policy" != takeover ]; then
-			echo "ERROR: $DEV already has an unmanaged ingress qdisc; refusing to replace it" >&2
+			echo "错误：$DEV 已有未由本服务管理的 ingress qdisc，已拒绝替换" >&2
 			return 1
 		fi
-		echo "WARNING: taking over existing ingress qdisc on $DEV: $ingress" >&2
+		echo "警告：正在接管 $DEV 上已有的 ingress qdisc：$ingress" >&2
 	fi
 	return 0
 }
@@ -433,9 +433,9 @@ stop_qos() {
 	return 0
 }
 init_qosplus() {
-	[ -n "$DEV" ] || { echo 'ERROR: no WAN shaping device resolved; set myeqosplus.main.ifname explicitly' >&2; return 1; }
-	[ -n "$IFB" ] || { echo 'ERROR: IFB device name is empty' >&2; return 1; }
-	[ -n "$NFT" ] || { echo 'ERROR: nft is required for IPv4/IPv6 marking' >&2; return 1; }
+	[ -n "$DEV" ] || { echo '错误：未能解析 WAN 限速设备，请明确设置 myeqosplus.main.ifname' >&2; return 1; }
+	[ -n "$IFB" ] || { echo '错误：IFB 设备名称为空' >&2; return 1; }
+	[ -n "$NFT" ] || { echo '错误：IPv4/IPv6 标记需要 nft 命令' >&2; return 1; }
 	check_root_ownership || return 1
 	command -v insmod >/dev/null 2>&1 && {
 		insmod sch_htb 2>/dev/null || true
@@ -450,11 +450,11 @@ init_qosplus() {
 	save_flow_offloading || return 1
 	if "$IP" link show dev "$IFB" >/dev/null 2>&1; then
 		if [ ! -f "$OWNER_DIR/owned_ifb" ]; then
-			echo "ERROR: IFB $IFB already exists and is not owned by $NAME" >&2
+			echo "错误：IFB 设备 $IFB 已存在，且不归 $NAME 管理" >&2
 			restore_flow_offloading
 			return 1
 		fi
-		"$IP" link del dev "$IFB" 2>/dev/null || { echo "ERROR: unable to remove stale IFB $IFB" >&2; restore_flow_offloading; return 1; }
+		"$IP" link del dev "$IFB" 2>/dev/null || { echo "错误：无法删除残留的 IFB 设备 $IFB" >&2; restore_flow_offloading; return 1; }
 	fi
 	"$IP" link add dev "$IFB" type ifb || { restore_flow_offloading; return 1; }
 	"$IP" link set dev "$IFB" up || { "$IP" link del dev "$IFB" 2>/dev/null; restore_flow_offloading; return 1; }
@@ -522,7 +522,7 @@ add_mac() {
 	id=$((index * 10 + 1000))
 	mac=$(uci -q get "$NAME.@device[$index].mac" 2>/dev/null | tr 'a-f' 'A-F')
 	valid_mac "$mac" || return 1
-	[ "$DL" -gt 0 ] || [ "$UL" -gt 0 ] || { echo "ERROR: policy $index has both rates set to zero" >&2; return 1; }
+	[ "$DL" -gt 0 ] || [ "$UL" -gt 0 ] || { echo "错误：限速策略 $index 的上传和下载速率均为零" >&2; return 1; }
 	add_mark_mac "$mac" "$id" || { remove_policy_rules "$mac"; return 1; }
 	add_mark_known_ips "$mac" "$id" || { remove_policy_rules "$mac" $(known_ips_for_mac "$mac"); return 1; }
 	if positive "$DL"; then
@@ -547,7 +547,7 @@ add_ip() {
 	address=$(uci -q get "$NAME.@device[$index].address" 2>/dev/null)
 	[ -n "$address" ] || address=$(uci -q get "$NAME.@device[$index].ip" 2>/dev/null)
 	[ -n "$address" ] || return 1
-	[ "$DL" -gt 0 ] || [ "$UL" -gt 0 ] || { echo "ERROR: policy $index has both rates set to zero" >&2; return 1; }
+	[ "$DL" -gt 0 ] || [ "$UL" -gt 0 ] || { echo "错误：限速策略 $index 的上传和下载速率均为零" >&2; return 1; }
 	prefix=$(printf '%s' "$address" | awk -F/ '{print $2}')
 	[ -n "$prefix" ] || { printf '%s' "$address" | grep -q ':' && prefix=128 || prefix=32; }
 	address=${address%/*}
@@ -660,26 +660,26 @@ save_policy_fingerprint() {
 }
 
 start_qos() {
-	[ "$(cfg enabled)" = 1 ] || { stop_qos; save_policy_fingerprint; log 'service disabled; no qdisc applied'; return 0; }
+	[ "$(cfg enabled)" = 1 ] || { stop_qos; save_policy_fingerprint; log '服务已禁用，未应用任何 qdisc'; return 0; }
 	stop_qos >/dev/null 2>&1
 	local indices i active=0 active_indices=
 	indices=$(device_indices)
-	[ -n "$indices" ] || { save_policy_fingerprint; log 'no enabled policies; no qdisc applied'; return 0; }
+	[ -n "$indices" ] || { save_policy_fingerprint; log '没有已启用的限速策略，未应用任何 qdisc'; return 0; }
 	for i in $indices; do check_schedule "$i" && active_indices="$active_indices $i"; done
-	[ -n "$active_indices" ] || { save_policy_fingerprint; log 'no policies active in the current schedule'; return 0; }
+	[ -n "$active_indices" ] || { save_policy_fingerprint; log '当前时段没有生效的限速策略'; return 0; }
 	init_qosplus || return 1
 	: > "$IDLIST"
 	for i in $active_indices; do
 		load_rates "$i"
 		mac=$(uci -q get "$NAME.@device[$i].mac" 2>/dev/null)
-		if valid_mac "$mac"; then add_mac "$i" || { log "failed to apply MAC policy index=$i"; stop_qos; return 1; }
+		if valid_mac "$mac"; then add_mac "$i" || { log "应用 MAC 限速策略失败：序号=$i"; stop_qos; return 1; }
 		else
-			add_ip "$i" || { log "failed to apply IP policy index=$i"; stop_qos; return 1; }
+			add_ip "$i" || { log "应用 IP 限速策略失败：序号=$i"; stop_qos; return 1; }
 		fi
 		active=$((active + 1)); printf '!%s!\n' "$i" >> "$IDLIST"
 	done
-	save_policy_fingerprint || { log 'WARNING: unable to save policy fingerprint'; }
-	log "service started: interface=$DEV active_policies=$active"
+	save_policy_fingerprint || { log '警告：无法保存限速策略指纹'; }
+	log "服务已启动：接口=$DEV 生效策略数=$active"
 	return 0
 }
 expected_ids() {
@@ -751,7 +751,7 @@ case "$ACTION" in
 	stop) stop_qos ;;
 	add)
 		[ -n "$ARG" ] || exit 2
-		[ "$(cfg enabled)" = 1 ] || { echo 'ERROR: service is disabled' >&2; exit 1; }
+		[ "$(cfg enabled)" = 1 ] || { echo '错误：服务已禁用' >&2; exit 1; }
 		if [ -f "$MQ_OWNED" ]; then
 			SHAPER_MODE=mq
 			DEV=$(cat "$MQ_DEVICE" 2>/dev/null)
@@ -776,6 +776,6 @@ case "$ACTION" in
 		"$TC" -s class show dev "$IFB" 2>/dev/null
 		[ -n "$NFT" ] && "$NFT" list table inet "$NAME" 2>/dev/null || true
 		;;
-	*) echo "usage: $0 {start|stop|reload|sync|add INDEX|del INDEX|status|status-json}" >&2; exit 2 ;;
+	*) echo "用法：$0 {start|stop|reload|sync|add 序号|del 序号|status|status-json}" >&2; exit 2 ;;
 esac
 
