@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="更新文案语言为中文">
+    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="“设置设备限速”弹窗布局优化">
       <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" beforeDir="false" afterPath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" afterDir="false" />
     </list>
@@ -71,7 +71,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1790220611140</updated>
-      <workItem from="1790220612510" duration="15760000" />
+      <workItem from="1790220612510" duration="16396000" />
     </task>
     <task id="LOCAL-00001" summary="更新项目">
       <option name="closed" value="true" />
@@ -113,7 +113,15 @@
       <option name="project" value="LOCAL" />
       <updated>1791606404054</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="“设置设备限速”弹窗布局优化">
+      <option name="closed" value="true" />
+      <created>1791607639658</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1791607639658</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -163,6 +171,7 @@
     <MESSAGE value="增加gitignore" />
     <MESSAGE value="修复缺失的菜单入口" />
     <MESSAGE value="更新文案语言为中文" />
-    <option name="LAST_COMMIT_MESSAGE" value="更新文案语言为中文" />
+    <MESSAGE value="“设置设备限速”弹窗布局优化" />
+    <option name="LAST_COMMIT_MESSAGE" value="“设置设备限速”弹窗布局优化" />
   </component>
 </project>

@@ -71,6 +71,73 @@ function input(name, value, type, attrs) {
 	return E('input', attrs);
 }
 
+function validatePolicy(values) {
+	var ratePattern = /^[0-9]+$/;
+	var timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+	var weekPattern = /^[1-7](,[1-7])*$/;
+	var down = String(values.download_kbit || '').trim() || '0';
+	var up = String(values.upload_kbit || '').trim() || '0';
+	var start = String(values.timestart || '').trim();
+	var end = String(values.timeend || '').trim();
+	var week = String(values.week || '').trim() || '0';
+
+	if (!ratePattern.test(down) || Number(down) > 100000000)
+		return { field: 'download_kbit', message: _('下载限速必须是 0 至 100000000 之间的整数。') };
+	if (!ratePattern.test(up) || Number(up) > 100000000)
+		return { field: 'upload_kbit', message: _('上传限速必须是 0 至 100000000 之间的整数。') };
+	if (Number(down) === 0 && Number(up) === 0)
+		return { field: 'download_kbit', fields: [ 'download_kbit', 'upload_kbit' ], message: _('下载和上传限速不能同时为 0，请至少设置一个非零值。') };
+	if ((start && !timePattern.test(start)) || (end && !timePattern.test(end)))
+		return { field: start && !timePattern.test(start) ? 'timestart' : 'timeend', message: _('生效时间格式无效，请使用 HH:MM 格式。') };
+	if (!!start !== !!end)
+		return { field: start ? 'timeend' : 'timestart', fields: [ 'timestart', 'timeend' ], message: _('开始时间和结束时间必须同时填写，或同时留空。') };
+	if (week !== '0' && !weekPattern.test(week))
+		return { field: 'week', message: _('生效星期格式无效：每天填写 0；指定日期请使用 1 至 7，并以英文逗号分隔。') };
+
+	values.download_kbit = down;
+	values.upload_kbit = up;
+	values.timestart = start;
+	values.timeend = end;
+	values.week = week;
+	return null;
+}
+
+function showPolicyToast(title, message, level) {
+	document.querySelectorAll('.myeqosplus-policy-toast').forEach(function(node) {
+		if (node.parentNode) node.parentNode.removeChild(node);
+	});
+
+	var content = E('p', {}, message);
+	var toast;
+	if (typeof ui.addTimeLimitedNotification === 'function')
+		toast = ui.addTimeLimitedNotification(title, content, 5000, level || 'warning');
+	else {
+		toast = ui.addNotification(title, content, level || 'warning');
+		window.setTimeout(function() {
+			if (toast.parentNode) toast.parentNode.removeChild(toast);
+		}, 5000);
+	}
+	toast.classList.add('myeqosplus-policy-toast');
+}
+
+function markPolicyInvalid(form, validation) {
+	form.querySelectorAll('input').forEach(function(field) {
+		field.classList.remove('myeqosplus-policy-invalid');
+		field.removeAttribute('aria-invalid');
+	});
+
+	var names = validation.fields || [ validation.field ];
+	names.forEach(function(name) {
+		var field = form.querySelector('[name="' + name + '"]');
+		if (!field) return;
+		field.classList.add('myeqosplus-policy-invalid');
+		field.setAttribute('aria-invalid', 'true');
+	});
+
+	var focusField = form.querySelector('[name="' + validation.field + '"]');
+	if (focusField) focusField.focus();
+}
+
 return view.extend({
 	load: function() {
 		var devices = callDevices().catch(function(err) {
@@ -167,6 +234,8 @@ return view.extend({
 			'.myeqosplus-policy-field-full{grid-column:1/-1}',
 			'.myeqosplus-policy-label{font-weight:600;color:var(--text-color-high,#334)}',
 			'.myeqosplus-policy-field input:not([type=checkbox]){width:100%;max-width:none;box-sizing:border-box}',
+			'.myeqosplus-policy-field input.myeqosplus-policy-invalid{border-color:#d94c4c!important;box-shadow:0 0 0 1px rgba(217,76,76,.18)!important}',
+			'.myeqosplus-policy-toast{position:fixed!important;top:18px!important;left:50%!important;right:auto!important;z-index:20000!important;width:min(560px,calc(100vw - 32px))!important;max-width:none!important;transform:translateX(-50%);box-sizing:border-box;box-shadow:0 8px 28px rgba(0,0,0,.28)}',
 			'.myeqosplus-policy-toggle{display:flex;align-items:center;gap:9px;min-height:36px}',
 			'.myeqosplus-policy-toggle input{margin:0}',
 			'.myeqosplus-policy-time{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}',
@@ -239,15 +308,27 @@ return view.extend({
 		});
 		save.addEventListener('click', function() {
 			var values = {};
-			form.querySelectorAll('input').forEach(function(el) { values[el.name] = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value; });
+			form.querySelectorAll('input').forEach(function(el) {
+				el.classList.remove('myeqosplus-policy-invalid');
+				el.removeAttribute('aria-invalid');
+				values[el.name] = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
+			});
 			values.mac = device.mac;
+
+			var validation = validatePolicy(values);
+			if (validation) {
+				markPolicyInvalid(form, validation);
+				showPolicyToast(_('参数无效'), validation.message, 'warning');
+				return;
+			}
+
 			save.disabled = true;
 			callPolicy(values.mac, '', values.name, values.enabled, values.download_kbit, values.upload_kbit, values.timestart, values.timeend, values.week).then(function(result) {
 				if (!result || !result.success) throw new Error(result && result.error || _('保存限速策略失败'));
 				ui.hideModal(); location.reload();
 			}).catch(function(err) {
 				console.error('保存限速策略失败：', err);
-				ui.addNotification(null, E('p', {}, errorMessage(err, _('保存限速策略失败，请检查 rpcd 服务。'))), 'error');
+				showPolicyToast(_('保存失败'), errorMessage(err, _('保存限速策略失败，请检查 rpcd 服务。')), 'error');
 				save.disabled = false;
 			});
 		});
