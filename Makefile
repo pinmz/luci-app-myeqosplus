@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-myeqosplus
 PKG_VERSION:=2.0.0
-PKG_RELEASE:=9
+PKG_RELEASE:=10
 PKG_MAINTAINER:=My eQoS Plus Team
 PKG_LICENSE:=GPL-2.0-only
 
@@ -31,8 +31,8 @@ if [ -x /usr/libexec/myeqosplus-migrate ]; then
 	/usr/libexec/myeqosplus-migrate || exit 1
 fi
 /etc/init.d/myeqosplus enable >/dev/null 2>&1 || true
-rm -f /tmp/luci-* /tmp/luci-modulecache.*
-/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache*
+/etc/init.d/rpcd restart >/dev/null 2>&1 || true
 exit 0
 endef
 
@@ -47,7 +47,8 @@ define Package/$(PKG_NAME)/postrm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 rm -rf /var/run/myeqosplus /var/myeqosplus.idlist
-/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache*
+/etc/init.d/rpcd restart >/dev/null 2>&1 || true
 exit 0
 endef
 

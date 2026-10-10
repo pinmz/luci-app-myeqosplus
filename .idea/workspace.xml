@@ -5,13 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="更新项目">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README_CN.md" beforeDir="false" afterPath="$PROJECT_DIR$/README_CN.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/settings.js" beforeDir="false" afterPath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/settings.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/etc/config/myeqosplus" beforeDir="false" afterPath="$PROJECT_DIR$/root/etc/config/myeqosplus" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/bin/myeqosplus" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/bin/myeqosplus" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/usr/share/luci/menu.d/luci-app-myeqosplus.json" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/share/luci/menu.d/luci-app-myeqosplus.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/usr/share/rpcd/ucode/myeqosplus.uc" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/share/rpcd/ucode/myeqosplus.uc" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,7 +73,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1790220611140</updated>
-      <workItem from="1790220612510" duration="11475000" />
+      <workItem from="1790220612510" duration="14072000" />
     </task>
     <task id="LOCAL-00001" summary="更新项目">
       <option name="closed" value="true" />
@@ -86,11 +83,22 @@
       <option name="project" value="LOCAL" />
       <updated>1790235743878</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="更新项目">
+      <option name="closed" value="true" />
+      <created>1791599112550</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1791599112550</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="UnknownFeatures">
+    <option featureType="com.intellij.fileTypeFactory" implementationName="Makefile" />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="更新项目" />

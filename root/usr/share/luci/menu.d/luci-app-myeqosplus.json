@@ -1,9 +1,20 @@
 {
+	"admin/control": {
+		"title": "Control",
+		"order": 44,
+		"action": {
+			"type": "firstchild",
+			"recurse": true
+		}
+	},
 	"admin/control/myeqosplus": {
 		"title": "My eQoS Plus",
 		"order": 10,
 		"action": {
 			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-myeqosplus" ]
 		}
 	},
 	"admin/control/myeqosplus/devices": {
@@ -12,6 +23,9 @@
 		"action": {
 			"type": "view",
 			"path": "myeqosplus/devices"
+		},
+		"depends": {
+			"acl": [ "luci-app-myeqosplus" ]
 		}
 	},
 	"admin/control/myeqosplus/settings": {
@@ -20,6 +34,9 @@
 		"action": {
 			"type": "view",
 			"path": "myeqosplus/settings"
+		},
+		"depends": {
+			"acl": [ "luci-app-myeqosplus" ]
 		}
 	}
 }
