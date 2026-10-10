@@ -7,7 +7,7 @@
 var callDevices = rpc.declare({ object: 'myeqosplus', method: 'devices' });
 var callStatus = rpc.declare({ object: 'myeqosplus', method: 'status' });
 var callRefresh = rpc.declare({ object: 'myeqosplus', method: 'refresh' });
-var callPolicy = rpc.declare({ object: 'myeqosplus', method: 'policy', params: [ 'mac', 'remove', 'name', 'enabled', 'download_kbit', 'upload_kbit', 'timestart', 'timeend', 'week' ] });
+var callPolicy = rpc.declare({ object: 'myeqosplus', method: 'policy', params: [ 'mac', 'remove', 'name', 'enabled', 'download_kbit', 'upload_kbit', 'timestart', 'timeend', 'time_ranges', 'week' ] });
 
 function policyFor(mac) {
 	var result = null;
@@ -84,14 +84,114 @@ function weekSelection(value) {
 	return selected.length ? selected : [ '0' ];
 }
 
+var MAX_TIME_RANGES = 8;
+
+function parseTimeRanges(value, legacyStart, legacyEnd) {
+	var source = String(value || '').trim();
+	var result = [];
+	var pattern = /^([01]?[0-9]|2[0-3]):([0-5][0-9])-([01]?[0-9]|2[0-3]):([0-5][0-9])$/;
+
+	if (!source && legacyStart && legacyEnd && legacyStart !== legacyEnd)
+		source = legacyStart + '-' + legacyEnd;
+
+	source.split(',').forEach(function(item) {
+		var match = item.trim().match(pattern);
+		if (match)
+			result.push({ start: ('0' + match[1]).slice(-2) + ':' + match[2], end: ('0' + match[3]).slice(-2) + ':' + match[4] });
+	});
+
+	return result.length ? result.slice(0, MAX_TIME_RANGES) : [ { start: '', end: '' } ];
+}
+
+function reindexTimeRangeRows(container) {
+	container.querySelectorAll('.myeqosplus-policy-time-row').forEach(function(row, index) {
+		var position = index + 1;
+		var start = row.querySelector('[data-time-range-role="start"]');
+		var end = row.querySelector('[data-time-range-role="end"]');
+		start.id = 'myeqosplus-policy-time-start-' + index;
+		end.id = 'myeqosplus-policy-time-end-' + index;
+		start.setAttribute('data-policy-field', 'time_range_start_' + index);
+		end.setAttribute('data-policy-field', 'time_range_end_' + index);
+		start.setAttribute('aria-label', _('第 %d 个时段开始时间').format(position));
+		end.setAttribute('aria-label', _('第 %d 个时段结束时间').format(position));
+	});
+}
+
+function appendTimeRangeRow(container, value) {
+	var start = E('input', {
+		'class': 'cbi-input',
+		type: 'time',
+		value: value && value.start || '',
+		'data-time-range-role': 'start'
+	});
+	var end = E('input', {
+		'class': 'cbi-input',
+		type: 'time',
+		value: value && value.end || '',
+		'data-time-range-role': 'end'
+	});
+	var remove = E('button', {
+		type: 'button',
+		'class': 'cbi-button cbi-button-remove myeqosplus-policy-time-remove'
+	}, _('删除'));
+	var row = E('div', { 'class': 'myeqosplus-policy-time-row' }, [
+		start,
+		E('span', { 'class': 'myeqosplus-policy-time-separator' }, _('至')),
+		end,
+		remove
+	]);
+
+	container.appendChild(row);
+	remove.addEventListener('click', function() {
+		var rows = container.querySelectorAll('.myeqosplus-policy-time-row');
+		if (rows.length === 1) {
+			start.value = '';
+			end.value = '';
+			start.focus();
+			return;
+		}
+		container.removeChild(row);
+		reindexTimeRangeRows(container);
+	});
+	reindexTimeRangeRows(container);
+}
+
+function collectTimeRanges(form) {
+	var rows = form.querySelectorAll('.myeqosplus-policy-time-row');
+	var pattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+	var ranges = [];
+	var seen = {};
+
+	for (var i = 0; i < rows.length; i++) {
+		var startField = rows[i].querySelector('[data-time-range-role="start"]');
+		var endField = rows[i].querySelector('[data-time-range-role="end"]');
+		var start = String(startField.value || '').trim();
+		var end = String(endField.value || '').trim();
+
+		if (!start && !end)
+			continue;
+		if (!start || !end)
+			return { error: { elements: [ startField, endField ], focusElement: start ? endField : startField, message: _('第 %d 个时段的开始时间和结束时间必须同时填写。').format(i + 1) } };
+		if (!pattern.test(start) || !pattern.test(end))
+			return { error: { elements: [ startField, endField ], focusElement: !pattern.test(start) ? startField : endField, message: _('第 %d 个时段格式无效，请使用 HH:MM 格式。').format(i + 1) } };
+		if (start === end)
+			return { error: { elements: [ startField, endField ], focusElement: startField, message: _('第 %d 个时段的开始时间不能与结束时间相同。').format(i + 1) } };
+
+		var item = start + '-' + end;
+		if (seen[item])
+			return { error: { elements: [ startField, endField ], focusElement: startField, message: _('第 %d 个时段与已有时段重复。').format(i + 1) } };
+		seen[item] = true;
+		ranges.push(item);
+	}
+
+	return { value: ranges.join(',') };
+}
+
 function validatePolicy(values) {
 	var ratePattern = /^[0-9]+$/;
-	var timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
 	var weekPattern = /^[1-7](,[1-7])*$/;
 	var down = String(values.download_kbit || '').trim() || '0';
 	var up = String(values.upload_kbit || '').trim() || '0';
-	var start = String(values.timestart || '').trim();
-	var end = String(values.timeend || '').trim();
 	var week = String(values.week || '').trim() || '0';
 
 	if (!ratePattern.test(down) || Number(down) > 100000000)
@@ -100,17 +200,11 @@ function validatePolicy(values) {
 		return { field: 'upload_kbit', message: _('上传限速必须是 0 至 100000000 之间的整数。') };
 	if (Number(down) === 0 && Number(up) === 0)
 		return { field: 'download_kbit', fields: [ 'download_kbit', 'upload_kbit' ], message: _('下载和上传限速不能同时为 0，请至少设置一个非零值。') };
-	if ((start && !timePattern.test(start)) || (end && !timePattern.test(end)))
-		return { field: start && !timePattern.test(start) ? 'timestart' : 'timeend', message: _('生效时间格式无效，请使用 HH:MM 格式。') };
-	if (!!start !== !!end)
-		return { field: start ? 'timeend' : 'timestart', fields: [ 'timestart', 'timeend' ], message: _('开始时间和结束时间必须同时填写，或同时留空。') };
 	if (week !== '0' && !weekPattern.test(week))
-		return { field: 'week', message: _('生效星期格式无效：每天填写 0；指定日期请使用 1 至 7，并以英文逗号分隔。') };
+		return { field: 'week', message: _('生效星期格式无效，请重新选择。') };
 
 	values.download_kbit = down;
 	values.upload_kbit = up;
-	values.timestart = start;
-	values.timeend = end;
 	values.week = week;
 	return null;
 }
@@ -143,15 +237,15 @@ function markPolicyInvalid(form, validation) {
 		field.removeAttribute('aria-invalid');
 	});
 
-	var names = validation.fields || [ validation.field ];
-	names.forEach(function(name) {
-		var field = policyField(form, name);
-		if (!field) return;
+	var fields = validation.elements || (validation.fields || [ validation.field ]).map(function(name) {
+		return policyField(form, name);
+	}).filter(Boolean);
+	fields.forEach(function(field) {
 		field.classList.add('myeqosplus-policy-invalid');
 		field.setAttribute('aria-invalid', 'true');
 	});
 
-	var focusField = policyField(form, validation.field);
+	var focusField = validation.focusElement || policyField(form, validation.field);
 	if (focusField) focusField.focus();
 }
 
@@ -277,6 +371,29 @@ return view.extend({
 			}
 			previousWeek = weekDropdown.getValue().slice();
 		});
+
+		var timeRangesContainer = E('div', {
+			id: 'myeqosplus-policy-time-ranges',
+			'class': 'myeqosplus-policy-time-ranges',
+			'data-policy-field': 'time_ranges'
+		});
+		parseTimeRanges(p.time_ranges, p.timestart, p.timeend).forEach(function(range) {
+			appendTimeRangeRow(timeRangesContainer, range);
+		});
+		var addTimeRange = E('button', {
+			type: 'button',
+			'class': 'cbi-button cbi-button-add myeqosplus-policy-time-add'
+		}, _('+ 添加时段'));
+		addTimeRange.addEventListener('click', function() {
+			if (timeRangesContainer.querySelectorAll('.myeqosplus-policy-time-row').length >= MAX_TIME_RANGES) {
+				showPolicyToast(_('无法添加时段'), _('每个策略最多支持 %d 个生效时段。').format(MAX_TIME_RANGES), 'warning');
+				return;
+			}
+			appendTimeRangeRow(timeRangesContainer, { start: '', end: '' });
+			var rows = timeRangesContainer.querySelectorAll('.myeqosplus-policy-time-row');
+			rows[rows.length - 1].querySelector('[data-time-range-role="start"]').focus();
+		});
+
 		var policyStyle = [
 			'.myeqosplus-policy-form{width:min(680px,calc(100vw - 48px));max-width:100%;box-sizing:border-box}',
 			'.myeqosplus-policy-device{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:18px;border:1px solid #dfe5ee;border-radius:6px;background:#f7f9fc}',
@@ -291,12 +408,16 @@ return view.extend({
 			'.myeqosplus-policy-toast{position:fixed!important;top:18px!important;left:50%!important;right:auto!important;z-index:20000!important;width:min(560px,calc(100vw - 32px))!important;max-width:none!important;transform:translateX(-50%);box-sizing:border-box;box-shadow:0 8px 28px rgba(0,0,0,.28)}',
 			'.myeqosplus-policy-toggle{display:flex;align-items:center;gap:9px;min-height:36px}',
 			'.myeqosplus-policy-toggle input{margin:0}',
-			'.myeqosplus-policy-time{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}',
+			'.myeqosplus-policy-time-ranges{display:flex;flex-direction:column;gap:9px}',
+			'.myeqosplus-policy-time-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;align-items:center;gap:10px}',
+			'.myeqosplus-policy-time-remove{min-width:64px}',
+			'.myeqosplus-policy-time-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}',
+			'.myeqosplus-policy-time-add{white-space:nowrap}',
 			'.myeqosplus-policy-help{margin:16px 0 0;padding:10px 12px;border-left:3px solid #5e72e4;background:#f7f8ff;color:#687083;line-height:1.6}',
 			'.myeqosplus-policy-inline-help{font-size:.86rem;color:#7a8294;line-height:1.5}',
 			'.myeqosplus-policy-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid #e6e9ef}',
 			'.myeqosplus-policy-actions .myeqosplus-policy-delete{margin-right:auto}',
-			'@media(max-width:600px){.myeqosplus-policy-form{width:calc(100vw - 32px)}.myeqosplus-policy-grid{grid-template-columns:1fr}.myeqosplus-policy-field-full{grid-column:auto}.myeqosplus-policy-device{align-items:flex-start;flex-direction:column}.myeqosplus-policy-time{grid-template-columns:1fr}.myeqosplus-policy-time-separator{text-align:center}.myeqosplus-policy-actions{flex-wrap:wrap}.myeqosplus-policy-actions .myeqosplus-policy-delete{width:100%;margin:0 0 4px}}'
+			'@media(max-width:600px){.myeqosplus-policy-form{width:calc(100vw - 32px)}.myeqosplus-policy-grid{grid-template-columns:1fr}.myeqosplus-policy-field-full{grid-column:auto}.myeqosplus-policy-device{align-items:flex-start;flex-direction:column}.myeqosplus-policy-time-row{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.myeqosplus-policy-time-remove{grid-column:1/-1;width:100%}.myeqosplus-policy-time-separator{text-align:center}.myeqosplus-policy-actions{flex-wrap:wrap}.myeqosplus-policy-actions .myeqosplus-policy-delete{width:100%;margin:0 0 4px}}'
 		].join('');
 		var form = E('div', { 'class': 'cbi-map myeqosplus-policy-form' }, [
 			E('style', {}, policyStyle),
@@ -325,17 +446,17 @@ return view.extend({
 					input('upload_kbit', p.upload_kbit || '0', 'number', { min: 0, max: 100000000, step: 1, placeholder: '0' })
 				]),
 				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
-					E('span', { 'class': 'myeqosplus-policy-label' }, _('生效时段')),
-					E('div', { 'class': 'myeqosplus-policy-time' }, [
-						input('timestart', p.timestart || '', 'time', { 'aria-label': _('开始时间') }),
-						E('span', { 'class': 'myeqosplus-policy-time-separator' }, _('至')),
-						input('timeend', p.timeend || '', 'time', { 'aria-label': _('结束时间') })
-					])
-				]),
-				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
 					E('label', { 'class': 'myeqosplus-policy-label', 'for': 'myeqosplus-policy-week' }, _('生效星期')),
 					weekNode,
 					E('div', { 'class': 'myeqosplus-policy-inline-help' }, _('支持多选；选择“每天”会自动取消其他星期，选择具体星期会自动取消“每天”。'))
+				]),
+				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
+					E('span', { 'class': 'myeqosplus-policy-label' }, _('生效时段')),
+					timeRangesContainer,
+					E('div', { 'class': 'myeqosplus-policy-time-tools' }, [
+						E('div', { 'class': 'myeqosplus-policy-inline-help' }, _('支持多个时段和跨午夜时段，最多 %d 个；全部留空表示全天生效。').format(MAX_TIME_RANGES)),
+						addTimeRange
+					])
 				])
 			]),
 			E('p', { 'class': 'myeqosplus-policy-help' }, _('下载和上传至少设置一个非零限速值；生效时段留空表示全天生效。'))
@@ -350,7 +471,7 @@ return view.extend({
 		cancel.addEventListener('click', ui.hideModal);
 		remove.addEventListener('click', function() {
 			remove.disabled = true;
-			callPolicy(device.mac, '1', '', '', '', '', '', '', '').then(function(result) {
+			callPolicy(device.mac, '1', '', '', '', '', '', '', '', '').then(function(result) {
 				if (!result || !result.success) throw new Error(result && result.error || _('删除限速策略失败'));
 				ui.hideModal(); location.reload();
 			}).catch(function(err) {
@@ -370,6 +491,13 @@ return view.extend({
 			});
 			values.mac = device.mac;
 			values.week = weekDropdown.getValue().join(',');
+			var timeRanges = collectTimeRanges(form);
+			if (timeRanges.error) {
+				markPolicyInvalid(form, timeRanges.error);
+				showPolicyToast(_('参数无效'), timeRanges.error.message, 'warning');
+				return;
+			}
+			values.time_ranges = timeRanges.value;
 
 			var validation = validatePolicy(values);
 			if (validation) {
@@ -379,7 +507,7 @@ return view.extend({
 			}
 
 			save.disabled = true;
-			callPolicy(values.mac, '', values.name, values.enabled, values.download_kbit, values.upload_kbit, values.timestart, values.timeend, values.week).then(function(result) {
+			callPolicy(values.mac, '', values.name, values.enabled, values.download_kbit, values.upload_kbit, '', '', values.time_ranges, values.week).then(function(result) {
 				if (!result || !result.success) throw new Error(result && result.error || _('保存限速策略失败'));
 				ui.hideModal(); location.reload();
 			}).catch(function(err) {

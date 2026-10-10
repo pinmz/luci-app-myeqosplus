@@ -2,7 +2,7 @@
 
 My eQoS Plus is an isolated OpenWrt 25.12 LuCI package derived from luci-app-eqosplus. It combines current and historical device discovery from Wi-Fi, DHCP, wired bridge FDB, IPv4/IPv6 neighbors and optional luci-app-wifihistory data.
 
-Policies are bound to normalized MAC addresses, so IPv4/IPv6 changes and offline periods do not lose a device policy. The LuCI device page lets users configure upload/download limits, schedules and enable state directly on each device.
+Policies are bound to normalized MAC addresses, so IPv4/IPv6 changes and offline periods do not lose a device policy. The LuCI device page lets users configure upload/download limits, weekday selection, up to eight time ranges and enable state directly on each device. Time ranges are stored as comma-separated `time_ranges` values such as `09:00-10:00,12:00-14:00`, with cross-midnight ranges supported.
 
 The package uses the `myeqosplus` namespace for its UCI config, init script, provider, nftables table, controller, view and ACL. Existing non-MQ root qdiscs are protected by default. An existing `mq` root is preserved and managed per hardware child queue; CAKE, SQM and other unmanaged non-MQ qdiscs require an explicit `multiqueue_policy=takeover` choice. Firewall4 flow-offloading values are saved before QoS activation and restored on stop or failure.
 

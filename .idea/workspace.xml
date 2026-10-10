@@ -4,9 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="“设置设备限速”弹窗布局优化">
+    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="优化参数选择">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README_CN.md" beforeDir="false" afterPath="$PROJECT_DIR$/README_CN.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" beforeDir="false" afterPath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/etc/config/myeqosplus" beforeDir="false" afterPath="$PROJECT_DIR$/root/etc/config/myeqosplus" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/usr/bin/myeqosplus" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/bin/myeqosplus" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/usr/libexec/myeqosplus-migrate" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/libexec/myeqosplus-migrate" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/root/usr/share/rpcd/ucode/myeqosplus.uc" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/share/rpcd/ucode/myeqosplus.uc" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -71,7 +78,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1790220611140</updated>
-      <workItem from="1790220612510" duration="16396000" />
+      <workItem from="1790220612510" duration="19387000" />
     </task>
     <task id="LOCAL-00001" summary="更新项目">
       <option name="closed" value="true" />
@@ -121,7 +128,23 @@
       <option name="project" value="LOCAL" />
       <updated>1791607639658</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="优化参数校验">
+      <option name="closed" value="true" />
+      <created>1791610635330</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1791610635330</updated>
+    </task>
+    <task id="LOCAL-00008" summary="优化参数选择">
+      <option name="closed" value="true" />
+      <created>1791614512282</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1791614512282</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -172,6 +195,8 @@
     <MESSAGE value="修复缺失的菜单入口" />
     <MESSAGE value="更新文案语言为中文" />
     <MESSAGE value="“设置设备限速”弹窗布局优化" />
-    <option name="LAST_COMMIT_MESSAGE" value="“设置设备限速”弹窗布局优化" />
+    <MESSAGE value="优化参数校验" />
+    <MESSAGE value="优化参数选择" />
+    <option name="LAST_COMMIT_MESSAGE" value="优化参数选择" />
   </component>
 </project>

@@ -606,17 +606,33 @@ check_time() {
 	fi
 }
 
+check_time_ranges() {
+	local ranges=$1 range start end
+	[ -n "$ranges" ] || return 0
+	for range in $(printf '%s' "$ranges" | tr ',' ' '); do
+		start=${range%%-*}
+		end=${range#*-}
+		[ "$start" != "$range" ] || continue
+		check_time "$start" "$end" && return 0
+	done
+	return 1
+}
+
 check_schedule() {
-	local i=$1 day start end week today matched=0
-	start=$(uci -q get "$NAME.@device[$i].timestart" 2>/dev/null)
-	end=$(uci -q get "$NAME.@device[$i].timeend" 2>/dev/null)
+	local i=$1 day start end ranges week today matched=0
+	ranges=$(uci -q get "$NAME.@device[$i].time_ranges" 2>/dev/null)
+	if [ -z "$ranges" ]; then
+		start=$(uci -q get "$NAME.@device[$i].timestart" 2>/dev/null)
+		end=$(uci -q get "$NAME.@device[$i].timeend" 2>/dev/null)
+		[ -n "$start" ] && [ -n "$end" ] && ranges="$start-$end"
+	fi
 	week=$(uci -q get "$NAME.@device[$i].week" 2>/dev/null)
 	today=$(date +%u)
 	if [ -n "$week" ] && [ "$week" != 0 ]; then
 		for day in $(printf '%s' "$week" | tr ',' ' '); do [ "$day" = "$today" ] && matched=1; done
 		[ "$matched" -eq 1 ] || return 1
 	fi
-	check_time "$start" "$end"
+	check_time_ranges "$ranges"
 }
 
 load_rates() {
@@ -639,10 +655,11 @@ policy_fingerprint() {
 		mac=$(uci -q get "$NAME.@device[$i].mac" 2>/dev/null | tr 'a-f' 'A-F')
 		address=$(uci -q get "$NAME.@device[$i].address" 2>/dev/null)
 		[ -n "$address" ] || address=$(uci -q get "$NAME.@device[$i].ip" 2>/dev/null)
-		printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+		printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
 			"$i" "$mac" "$address" \
 			"$(uci -q get "$NAME.@device[$i].download_kbit" 2>/dev/null)" \
 			"$(uci -q get "$NAME.@device[$i].upload_kbit" 2>/dev/null)" \
+			"$(uci -q get "$NAME.@device[$i].time_ranges" 2>/dev/null)" \
 			"$(uci -q get "$NAME.@device[$i].timestart" 2>/dev/null)" \
 			"$(uci -q get "$NAME.@device[$i].timeend" 2>/dev/null)" \
 			"$(uci -q get "$NAME.@device[$i].week" 2>/dev/null)" \

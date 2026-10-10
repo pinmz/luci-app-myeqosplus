@@ -78,6 +78,43 @@ function valid_time(value) {
 	return !value || match(value, /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/) ? value : null;
 }
 
+function valid_time_ranges(value, legacy_start, legacy_end) {
+	value = trim(value || '');
+
+	/* Accept one legacy single range while browser/rpcd caches are rolling over. */
+	if (!value) {
+		let start = valid_time(legacy_start);
+		let end = valid_time(legacy_end);
+		if (start == null || end == null || (!!start != !!end))
+			return null;
+		if (!start || start == end)
+			return '';
+		value = start + '-' + end;
+	}
+
+	let normalized = '';
+	let count = 0;
+	for (let item in split(value, ',')) {
+		let parts = split(trim(item), '-');
+		if (length(parts) != 2)
+			return null;
+
+		let start = valid_time(parts[0]);
+		let end = valid_time(parts[1]);
+		if (!start || !end || start == end)
+			return null;
+
+		count++;
+		if (count > 8)
+			return null;
+
+		let range = start + '-' + end;
+		normalized = normalized ? normalized + ',' + range : range;
+	}
+
+	return normalized;
+}
+
 function valid_week(value) {
 	value = trim(value || '0');
 	return value == '0' || match(value, /^[1-7](,[1-7])*$/) ? value : null;
@@ -134,6 +171,7 @@ const methods = {
 			upload_kbit: '',
 			timestart: '',
 			timeend: '',
+			time_ranges: '',
 			week: ''
 		},
 
@@ -164,13 +202,15 @@ const methods = {
 
 			let down = valid_rate(args.download_kbit);
 			let up = valid_rate(args.upload_kbit);
-			let start = valid_time(args.timestart);
-			let end = valid_time(args.timeend);
+			let ranges = valid_time_ranges(args.time_ranges, args.timestart, args.timeend);
 			let week = valid_week(args.week);
 
-			if (down == null || up == null || (+down == 0 && +up == 0) ||
-			    start == null || end == null || week == null || (!!start != !!end))
-				return { success: false, error: '限速策略参数无效' };
+			if (down == null || up == null || (+down == 0 && +up == 0))
+				return { success: false, error: '下载和上传限速参数无效' };
+			if (ranges == null)
+				return { success: false, error: '生效时段格式无效，最多支持 8 个完整时段' };
+			if (week == null)
+				return { success: false, error: '生效星期参数无效' };
 
 			let section = old ? old['.name'] : ctx.add('myeqosplus', 'device');
 			if (!section)
@@ -182,8 +222,9 @@ const methods = {
 			ctx.set('myeqosplus', section, 'enable', args.enabled == '1' ? '1' : '0');
 			ctx.set('myeqosplus', section, 'download_kbit', down);
 			ctx.set('myeqosplus', section, 'upload_kbit', up);
-			ctx.set('myeqosplus', section, 'timestart', start);
-			ctx.set('myeqosplus', section, 'timeend', end);
+			ctx.set('myeqosplus', section, 'time_ranges', ranges);
+			ctx.delete('myeqosplus', section, 'timestart');
+			ctx.delete('myeqosplus', section, 'timeend');
 			ctx.set('myeqosplus', section, 'week', week);
 
 			if (!ctx.commit('myeqosplus'))

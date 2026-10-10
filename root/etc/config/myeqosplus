@@ -1,6 +1,6 @@
 config myeqosplus 'main'
 	option enabled '0'
-	option schema_version '2'
+	option schema_version '3'
 	option ifname 'auto'
 	option wan_network 'wan'
 	option lan_network 'lan'
@@ -15,6 +15,8 @@ config myeqosplus 'main'
 
 # Device policies are bound to a MAC and remain while the device is offline.
 # download_kbit shapes WAN ingress through IFB; upload_kbit shapes WAN egress.
+# Optional schedule: option week '1,2,3,4,5' and
+# option time_ranges '09:00-10:00,12:00-14:00'; empty means all day.
 
 # Optional import path written by wifihistory-compatible deployments.
 # option wifihistory_file '/var/lib/wifihistory/devices.tsv'

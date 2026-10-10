@@ -7,7 +7,7 @@ My eQoS Plus 是基于 `luci-app-eqosplus` 重构的 OpenWrt 25.12 LuCI 应用�
 - 展示当前设备和历史设备：无线、DHCP、有线 bridge FDB、IPv4/IPv6 邻居表；
 - 可选导入 `luci-app-wifihistory` 的历史设备数据；
 - 设备以规范化 MAC/device_id 绑定策略，不依赖临时 IPv4 地址；
-- 在设备列表中直接设置上传/下载 kbit/s、启用状态和时间计划；
+- 在设备列表中直接设置上传/下载 kbit/s、启用状态、星期多选和多个生效时段；
 - 离线设备可以先保存策略，设备再次上线后由轻量后台更新器应用；
 - nftables `inet myeqosplus` 标记同时覆盖 IPv4/IPv6；
 - 默认保留已有 `mq` 根并对每个硬件子队列建立独立 HTB；CAKE、SQM 等非 `mq` 根 qdisc 仍拒绝接管，显式设置 `multiqueue_policy=takeover` 才允许替换；
@@ -56,6 +56,8 @@ config myeqosplus 'main'
 ```
 
 `multiqueue_mode=preserve`（默认）发现接口根 qdisc 为 `mq` 时会保留根队列，并按硬件队列数量建立独立 HTB；发现 CAKE、SQM 或其它未被本服务标记的非 `mq` 根 qdisc 时，`multiqueue_policy=refuse` 会拒绝启动，只有明确设置为 `takeover` 才会删除并替换。启动前会保存 flow offloading，停止、禁用或异常回滚时恢复。
+
+设备策略使用 `time_ranges` 保存多个生效时段，例如 `09:00-10:00,12:00-14:00`；空值表示全天。每条策略最多支持 8 个时段，支持 `23:00-02:00` 这类跨午夜范围。升级时会把旧的 `timestart`/`timeend` 自动迁移到新字段。
 
 ## 设备发现数据
 
