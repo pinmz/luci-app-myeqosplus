@@ -19,6 +19,19 @@ function policyFor(mac) {
 	return result;
 }
 
+function deviceDisplayName(device, policy) {
+	var configured = String(policy && policy.comment || '').trim();
+	if (configured)
+		return configured;
+
+	var discovered = String(device && device.name || '').trim();
+	var mac = String(device && device.mac || '').trim();
+	if (discovered && (!mac || discovered.toUpperCase() !== mac.toUpperCase()))
+		return discovered;
+
+	return '';
+}
+
 function text(value) {
 	return value || _('?');
 }
@@ -304,10 +317,11 @@ return view.extend({
 			var source = [sourceText(device.sources), interfaceText(device.interfaces)].filter(Boolean).join(' / ');
 			var state = device.online ? _('在线') : _('离线 / 历史设备');
 			var policyText = p.mac ? ((p.enable === '1' ? _('限速策略：下载 %s / 上传 %s kbit/s') : _('限速策略已禁用：下载 %s / 上传 %s kbit/s')).format(p.download_kbit || '0', p.upload_kbit || '0')) : _('未设置限速');
+			var displayName = deviceDisplayName(device, p);
 			var edit = E('button', { 'class': 'cbi-button cbi-button-action' }, p.mac ? _('编辑限速') : _('设置限速'));
 			edit.addEventListener('click', function() { self.showPolicy(device); });
 			table.appendChild(E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td' }, [ E('strong', {}, device.name || device.mac), E('br'), E('small', {}, device.mac), E('br'), E('small', {}, state) ]),
+				E('td', { 'class': 'td' }, [ E('strong', {}, displayName || device.mac), E('br'), E('small', {}, device.mac), E('br'), E('small', {}, state) ]),
 				E('td', { 'class': 'td' }, addresses),
 				E('td', { 'class': 'td' }, [ E('div', {}, text(source)), E('small', {}, policyText) ]),
 				E('td', { 'class': 'td' }, [ E('div', {}, _('首次发现：%s').format(timestamp(device.first_seen))), E('div', {}, _('最后发现：%s').format(timestamp(device.last_seen))) ]),
@@ -332,9 +346,9 @@ return view.extend({
 		var self = this;
 		var p = policyFor(device.mac) || {};
 		var enabled = p.enable === '1';
-		var hasName = device.name && device.name.toUpperCase() !== device.mac.toUpperCase();
-		var displayName = hasName ? device.name : _('未命名设备');
-		var configuredName = p.comment || (hasName ? device.name : '');
+		var discoveredName = deviceDisplayName(device, null);
+		var configuredName = String(p.comment || discoveredName || '').trim();
+		var displayName = configuredName || _('未命名设备');
 		var selectedWeek = weekSelection(p.week);
 		var weekDropdown = new ui.Dropdown(selectedWeek, {
 			'0': _('每天'),
