@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-myeqosplus
 PKG_VERSION:=2.0.0
-PKG_RELEASE:=11
+PKG_RELEASE:=12
 PKG_MAINTAINER:=My eQoS Plus Team
 PKG_LICENSE:=GPL-2.0-only
 

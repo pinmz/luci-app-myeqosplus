@@ -63,6 +63,7 @@ function errorMessage(err, fallback) {
 
 function input(name, value, type, attrs) {
 	attrs = attrs || {};
+	attrs.id = attrs.id || 'myeqosplus-policy-' + name;
 	attrs.name = name;
 	attrs.type = type || 'text';
 	attrs.value = value == null ? '' : value;
@@ -153,23 +154,77 @@ return view.extend({
 		var self = this;
 		var p = policyFor(device.mac) || {};
 		var enabled = p.enable === '1';
-		var form = E('div', { 'class': 'cbi-map' }, [
-			E('p', {}, [ E('strong', {}, device.name || device.mac), ' ', E('small', {}, device.mac) ]),
-			E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('设备名称')), E('div', { 'class': 'cbi-value-field' }, input('name', p.comment || device.name || '')) ]),
-			E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('启用')), E('div', { 'class': 'cbi-value-field' }, input('enabled', enabled ? '1' : '0', 'checkbox', { checked: enabled })) ]),
-			E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('下载限速（kbit/s）')), E('div', { 'class': 'cbi-value-field' }, input('download_kbit', p.download_kbit || '0', 'number', { min: 0, max: 100000000 })) ]),
-			E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('上传限速（kbit/s）')), E('div', { 'class': 'cbi-value-field' }, input('upload_kbit', p.upload_kbit || '0', 'number', { min: 0, max: 100000000 })) ]),
-			E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('生效时段')), E('div', { 'class': 'cbi-value-field' }, [ input('timestart', p.timestart || '', 'time'), ' 至 ', input('timeend', p.timeend || '', 'time') ]) ]),
-			E('div', { 'class': 'cbi-value' }, [ E('label', { 'class': 'cbi-value-title' }, _('生效星期')), E('div', { 'class': 'cbi-value-field' }, input('week', p.week || '0', 'text', { placeholder: '0 或 1,2,3' })) ]),
-			E('p', { 'class': 'cbi-value-description' }, _('上传或下载至少设置一个非零限速值。星期使用 1=星期一至 7=星期日，0 表示每天。'))
+		var hasName = device.name && device.name.toUpperCase() !== device.mac.toUpperCase();
+		var displayName = hasName ? device.name : _('未命名设备');
+		var configuredName = p.comment || (hasName ? device.name : '');
+		var policyStyle = [
+			'.myeqosplus-policy-form{width:min(680px,calc(100vw - 48px));max-width:100%;box-sizing:border-box}',
+			'.myeqosplus-policy-device{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:18px;border:1px solid #dfe5ee;border-radius:6px;background:#f7f9fc}',
+			'.myeqosplus-policy-device-name{font-size:1.08rem;font-weight:600;overflow-wrap:anywhere}',
+			'.myeqosplus-policy-mac{padding:3px 8px;border-radius:4px;background:#e9edf5;white-space:nowrap}',
+			'.myeqosplus-policy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 20px}',
+			'.myeqosplus-policy-field{display:flex;flex-direction:column;gap:7px;min-width:0}',
+			'.myeqosplus-policy-field-full{grid-column:1/-1}',
+			'.myeqosplus-policy-label{font-weight:600;color:var(--text-color-high,#334)}',
+			'.myeqosplus-policy-field input:not([type=checkbox]){width:100%;max-width:none;box-sizing:border-box}',
+			'.myeqosplus-policy-toggle{display:flex;align-items:center;gap:9px;min-height:36px}',
+			'.myeqosplus-policy-toggle input{margin:0}',
+			'.myeqosplus-policy-time{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}',
+			'.myeqosplus-policy-help{margin:16px 0 0;padding:10px 12px;border-left:3px solid #5e72e4;background:#f7f8ff;color:#687083;line-height:1.6}',
+			'.myeqosplus-policy-inline-help{font-size:.86rem;color:#7a8294;line-height:1.5}',
+			'.myeqosplus-policy-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid #e6e9ef}',
+			'.myeqosplus-policy-actions .myeqosplus-policy-delete{margin-right:auto}',
+			'@media(max-width:600px){.myeqosplus-policy-form{width:calc(100vw - 32px)}.myeqosplus-policy-grid{grid-template-columns:1fr}.myeqosplus-policy-field-full{grid-column:auto}.myeqosplus-policy-device{align-items:flex-start;flex-direction:column}.myeqosplus-policy-time{grid-template-columns:1fr}.myeqosplus-policy-time-separator{text-align:center}.myeqosplus-policy-actions{flex-wrap:wrap}.myeqosplus-policy-actions .myeqosplus-policy-delete{width:100%;margin:0 0 4px}}'
+		].join('');
+		var form = E('div', { 'class': 'cbi-map myeqosplus-policy-form' }, [
+			E('style', {}, policyStyle),
+			E('div', { 'class': 'myeqosplus-policy-device' }, [
+				E('div', { 'class': 'myeqosplus-policy-device-name' }, displayName),
+				E('code', { 'class': 'myeqosplus-policy-mac' }, device.mac)
+			]),
+			E('div', { 'class': 'myeqosplus-policy-grid' }, [
+				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
+					E('label', { 'class': 'myeqosplus-policy-label', 'for': 'myeqosplus-policy-name' }, _('设备名称')),
+					input('name', configuredName, 'text', { placeholder: _('例如：客厅电视') })
+				]),
+				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
+					E('span', { 'class': 'myeqosplus-policy-label' }, _('策略状态')),
+					E('label', { 'class': 'myeqosplus-policy-toggle', 'for': 'myeqosplus-policy-enabled' }, [
+						input('enabled', enabled ? '1' : '0', 'checkbox', { checked: enabled }),
+						E('span', {}, _('启用此设备的限速策略'))
+					])
+				]),
+				E('div', { 'class': 'myeqosplus-policy-field' }, [
+					E('label', { 'class': 'myeqosplus-policy-label', 'for': 'myeqosplus-policy-download_kbit' }, _('下载限速（kbit/s）')),
+					input('download_kbit', p.download_kbit || '0', 'number', { min: 0, max: 100000000, step: 1, placeholder: '0' })
+				]),
+				E('div', { 'class': 'myeqosplus-policy-field' }, [
+					E('label', { 'class': 'myeqosplus-policy-label', 'for': 'myeqosplus-policy-upload_kbit' }, _('上传限速（kbit/s）')),
+					input('upload_kbit', p.upload_kbit || '0', 'number', { min: 0, max: 100000000, step: 1, placeholder: '0' })
+				]),
+				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
+					E('span', { 'class': 'myeqosplus-policy-label' }, _('生效时段')),
+					E('div', { 'class': 'myeqosplus-policy-time' }, [
+						input('timestart', p.timestart || '', 'time', { 'aria-label': _('开始时间') }),
+						E('span', { 'class': 'myeqosplus-policy-time-separator' }, _('至')),
+						input('timeend', p.timeend || '', 'time', { 'aria-label': _('结束时间') })
+					])
+				]),
+				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
+					E('label', { 'class': 'myeqosplus-policy-label', 'for': 'myeqosplus-policy-week' }, _('生效星期')),
+					input('week', p.week || '0', 'text', { placeholder: _('例如：0 或 1,2,3') }),
+					E('div', { 'class': 'myeqosplus-policy-inline-help' }, _('0 表示每天；1 至 7 分别表示星期一至星期日，多个日期使用英文逗号分隔。'))
+				])
+			]),
+			E('p', { 'class': 'myeqosplus-policy-help' }, _('下载和上传至少设置一个非零限速值；生效时段留空表示全天生效。'))
 		]);
 		var save = E('button', { 'class': 'cbi-button cbi-button-save' }, _('保存限速'));
-		var remove = E('button', { 'class': 'cbi-button cbi-button-reset' }, _('删除限速'));
+		var remove = E('button', { 'class': 'cbi-button cbi-button-reset myeqosplus-policy-delete' }, _('删除限速'));
 		var cancel = E('button', { 'class': 'cbi-button' }, _('取消'));
 		if (!p.mac) remove.style.display = 'none';
-		var buttons = E('div', { 'class': 'right' }, [ cancel, remove, save ]);
+		var buttons = E('div', { 'class': 'myeqosplus-policy-actions' }, [ remove, cancel, save ]);
 		form.appendChild(buttons);
-		ui.showModal(_('设备限速策略'), [ form ]);
+		ui.showModal(_('设置设备限速'), [ form ]);
 		cancel.addEventListener('click', ui.hideModal);
 		remove.addEventListener('click', function() {
 			remove.disabled = true;

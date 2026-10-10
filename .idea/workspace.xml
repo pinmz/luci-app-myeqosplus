@@ -4,16 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="修复缺失的菜单入口">
+    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="更新文案语言为中文">
       <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" beforeDir="false" afterPath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/settings.js" beforeDir="false" afterPath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/settings.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/bin/myeqosplus" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/bin/myeqosplus" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/libexec/myeqosplus-migrate" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/libexec/myeqosplus-migrate" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/sbin/myeqosplus-devices" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/sbin/myeqosplus-devices" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/share/luci/menu.d/luci-app-myeqosplus.json" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/share/luci/menu.d/luci-app-myeqosplus.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/share/rpcd/acl.d/luci-app-myeqosplus.json" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/share/rpcd/acl.d/luci-app-myeqosplus.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/root/usr/share/rpcd/ucode/myeqosplus.uc" beforeDir="false" afterPath="$PROJECT_DIR$/root/usr/share/rpcd/ucode/myeqosplus.uc" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -78,7 +71,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1790220611140</updated>
-      <workItem from="1790220612510" duration="15025000" />
+      <workItem from="1790220612510" duration="15760000" />
     </task>
     <task id="LOCAL-00001" summary="更新项目">
       <option name="closed" value="true" />
@@ -112,7 +105,15 @@
       <option name="project" value="LOCAL" />
       <updated>1791604218312</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="更新文案语言为中文">
+      <option name="closed" value="true" />
+      <created>1791606404054</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1791606404054</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -121,10 +122,47 @@
   <component name="UnknownFeatures">
     <option featureType="com.intellij.fileTypeFactory" implementationName="Makefile" />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="OPEN_GENERIC_TABS">
+      <map>
+        <entry key="db319a5d-3355-4d55-bd32-900010bc103a" value="TOOL_WINDOW" />
+      </map>
+    </option>
+    <option name="TAB_STATES">
+      <map>
+        <entry key="db319a5d-3355-4d55-bd32-900010bc103a">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                  <entry key="roots">
+                    <value>
+                      <list>
+                        <option value="$PROJECT_DIR$" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="更新项目" />
     <MESSAGE value="增加gitignore" />
     <MESSAGE value="修复缺失的菜单入口" />
-    <option name="LAST_COMMIT_MESSAGE" value="修复缺失的菜单入口" />
+    <MESSAGE value="更新文案语言为中文" />
+    <option name="LAST_COMMIT_MESSAGE" value="更新文案语言为中文" />
   </component>
 </project>
