@@ -71,6 +71,19 @@ function input(name, value, type, attrs) {
 	return E('input', attrs);
 }
 
+function weekSelection(value) {
+	value = String(value || '0').trim();
+	if (value === '0') return [ '0' ];
+
+	var selected = [];
+	value.split(',').forEach(function(day) {
+		day = day.trim();
+		if (/^[1-7]$/.test(day) && selected.indexOf(day) < 0)
+			selected.push(day);
+	});
+	return selected.length ? selected : [ '0' ];
+}
+
 function validatePolicy(values) {
 	var ratePattern = /^[0-9]+$/;
 	var timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
@@ -120,21 +133,25 @@ function showPolicyToast(title, message, level) {
 	toast.classList.add('myeqosplus-policy-toast');
 }
 
+function policyField(form, name) {
+	return form.querySelector('[name="' + name + '"], [data-policy-field="' + name + '"]');
+}
+
 function markPolicyInvalid(form, validation) {
-	form.querySelectorAll('input').forEach(function(field) {
+	form.querySelectorAll('.myeqosplus-policy-invalid').forEach(function(field) {
 		field.classList.remove('myeqosplus-policy-invalid');
 		field.removeAttribute('aria-invalid');
 	});
 
 	var names = validation.fields || [ validation.field ];
 	names.forEach(function(name) {
-		var field = form.querySelector('[name="' + name + '"]');
+		var field = policyField(form, name);
 		if (!field) return;
 		field.classList.add('myeqosplus-policy-invalid');
 		field.setAttribute('aria-invalid', 'true');
 	});
 
-	var focusField = form.querySelector('[name="' + validation.field + '"]');
+	var focusField = policyField(form, validation.field);
 	if (focusField) focusField.focus();
 }
 
@@ -224,6 +241,42 @@ return view.extend({
 		var hasName = device.name && device.name.toUpperCase() !== device.mac.toUpperCase();
 		var displayName = hasName ? device.name : _('未命名设备');
 		var configuredName = p.comment || (hasName ? device.name : '');
+		var selectedWeek = weekSelection(p.week);
+		var weekDropdown = new ui.Dropdown(selectedWeek, {
+			'0': _('每天'),
+			'1': _('星期一'),
+			'2': _('星期二'),
+			'3': _('星期三'),
+			'4': _('星期四'),
+			'5': _('星期五'),
+			'6': _('星期六'),
+			'7': _('星期日')
+		}, {
+			id: 'myeqosplus-policy-week',
+			multiple: true,
+			optional: false,
+			sort: [ '0', '1', '2', '3', '4', '5', '6', '7' ],
+			display_items: 4,
+			dropdown_items: 8
+		});
+		var weekNode = weekDropdown.render();
+		weekNode.setAttribute('data-policy-field', 'week');
+		weekNode.setAttribute('aria-label', _('生效星期'));
+		var previousWeek = selectedWeek.slice();
+		var normalizingWeek = false;
+		weekNode.addEventListener('cbi-dropdown-change', function() {
+			if (normalizingWeek) return;
+			var selected = weekDropdown.getValue();
+			var hadEveryDay = previousWeek.indexOf('0') >= 0;
+			var hasEveryDay = selected.indexOf('0') >= 0;
+
+			if (hasEveryDay && selected.length > 1) {
+				normalizingWeek = true;
+				weekDropdown.setValue(hadEveryDay ? selected.filter(function(day) { return day !== '0'; }) : [ '0' ]);
+				normalizingWeek = false;
+			}
+			previousWeek = weekDropdown.getValue().slice();
+		});
 		var policyStyle = [
 			'.myeqosplus-policy-form{width:min(680px,calc(100vw - 48px));max-width:100%;box-sizing:border-box}',
 			'.myeqosplus-policy-device{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:18px;border:1px solid #dfe5ee;border-radius:6px;background:#f7f9fc}',
@@ -233,8 +286,8 @@ return view.extend({
 			'.myeqosplus-policy-field{display:flex;flex-direction:column;gap:7px;min-width:0}',
 			'.myeqosplus-policy-field-full{grid-column:1/-1}',
 			'.myeqosplus-policy-label{font-weight:600;color:var(--text-color-high,#334)}',
-			'.myeqosplus-policy-field input:not([type=checkbox]){width:100%;max-width:none;box-sizing:border-box}',
-			'.myeqosplus-policy-field input.myeqosplus-policy-invalid{border-color:#d94c4c!important;box-shadow:0 0 0 1px rgba(217,76,76,.18)!important}',
+			'.myeqosplus-policy-field input:not([type=checkbox]),.myeqosplus-policy-field .cbi-dropdown{width:100%;max-width:none;box-sizing:border-box}',
+			'.myeqosplus-policy-field input.myeqosplus-policy-invalid,.myeqosplus-policy-field .cbi-dropdown.myeqosplus-policy-invalid{border-color:#d94c4c!important;box-shadow:0 0 0 1px rgba(217,76,76,.18)!important}',
 			'.myeqosplus-policy-toast{position:fixed!important;top:18px!important;left:50%!important;right:auto!important;z-index:20000!important;width:min(560px,calc(100vw - 32px))!important;max-width:none!important;transform:translateX(-50%);box-sizing:border-box;box-shadow:0 8px 28px rgba(0,0,0,.28)}',
 			'.myeqosplus-policy-toggle{display:flex;align-items:center;gap:9px;min-height:36px}',
 			'.myeqosplus-policy-toggle input{margin:0}',
@@ -281,8 +334,8 @@ return view.extend({
 				]),
 				E('div', { 'class': 'myeqosplus-policy-field myeqosplus-policy-field-full' }, [
 					E('label', { 'class': 'myeqosplus-policy-label', 'for': 'myeqosplus-policy-week' }, _('生效星期')),
-					input('week', p.week || '0', 'text', { placeholder: _('例如：0 或 1,2,3') }),
-					E('div', { 'class': 'myeqosplus-policy-inline-help' }, _('0 表示每天；1 至 7 分别表示星期一至星期日，多个日期使用英文逗号分隔。'))
+					weekNode,
+					E('div', { 'class': 'myeqosplus-policy-inline-help' }, _('支持多选；选择“每天”会自动取消其他星期，选择具体星期会自动取消“每天”。'))
 				])
 			]),
 			E('p', { 'class': 'myeqosplus-policy-help' }, _('下载和上传至少设置一个非零限速值；生效时段留空表示全天生效。'))
@@ -308,12 +361,15 @@ return view.extend({
 		});
 		save.addEventListener('click', function() {
 			var values = {};
-			form.querySelectorAll('input').forEach(function(el) {
+			form.querySelectorAll('.myeqosplus-policy-invalid').forEach(function(el) {
 				el.classList.remove('myeqosplus-policy-invalid');
 				el.removeAttribute('aria-invalid');
+			});
+			form.querySelectorAll('input[name]').forEach(function(el) {
 				values[el.name] = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
 			});
 			values.mac = device.mac;
+			values.week = weekDropdown.getValue().join(',');
 
 			var validation = validatePolicy(values);
 			if (validation) {
