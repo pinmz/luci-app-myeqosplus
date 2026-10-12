@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="增加多时段设置">
+    <list default="true" id="a4b3d669-9c1f-4a12-b0e9-a9745c119859" name="更改" comment="优化设备名称显示">
       <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" beforeDir="false" afterPath="$PROJECT_DIR$/htdocs/luci-static/resources/view/myeqosplus/devices.js" afterDir="false" />
     </list>
@@ -71,7 +71,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1790220611140</updated>
-      <workItem from="1790220612510" duration="20005000" />
+      <workItem from="1790220612510" duration="20661000" />
     </task>
     <task id="LOCAL-00001" summary="更新项目">
       <option name="closed" value="true" />
@@ -145,7 +145,15 @@
       <option name="project" value="LOCAL" />
       <updated>1791616204195</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="优化设备名称显示">
+      <option name="closed" value="true" />
+      <created>1791616824277</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1791616824277</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -199,6 +207,7 @@
     <MESSAGE value="优化参数校验" />
     <MESSAGE value="优化参数选择" />
     <MESSAGE value="增加多时段设置" />
-    <option name="LAST_COMMIT_MESSAGE" value="增加多时段设置" />
+    <MESSAGE value="优化设备名称显示" />
+    <option name="LAST_COMMIT_MESSAGE" value="优化设备名称显示" />
   </component>
 </project>

@@ -45,6 +45,15 @@ function uniqueValues(value) {
 	});
 }
 
+function appendAddressRows(target, label, value) {
+	uniqueValues(value).forEach(function(address) {
+		target.push(E('div', { 'class': 'myeqosplus-address-line', title: address }, [
+			E('span', { 'class': 'myeqosplus-address-label' }, label + ': '),
+			E('span', { 'class': 'myeqosplus-address-value' }, address)
+		]));
+	});
+}
+
 function sourceText(value) {
 	var labels = {
 		dhcp: _('DHCP 租约'),
@@ -279,7 +288,19 @@ return view.extend({
 		var self = this;
 		var devices = (data[1] && data[1].devices) || [];
 		var status = data[2] || {};
-		var root = E('div', { 'class': 'cbi-map' });
+		var pageStyle = [
+			'.myeqosplus-device-table{width:100%;table-layout:fixed}',
+			'.myeqosplus-device-table .myeqosplus-device-col{width:17%}',
+			'.myeqosplus-device-table .myeqosplus-address-col{width:30%;max-width:30vw;white-space:normal!important;overflow-wrap:anywhere;word-break:break-word}',
+			'.myeqosplus-device-table .myeqosplus-source-col{width:21%;overflow-wrap:anywhere}',
+			'.myeqosplus-device-table .myeqosplus-history-col{width:22%;overflow-wrap:anywhere}',
+			'.myeqosplus-device-table .myeqosplus-action-col{width:10%}',
+			'.myeqosplus-address-line{display:flex;align-items:flex-start;min-width:0;margin:.12rem 0;line-height:1.45}',
+			'.myeqosplus-address-label{flex:0 0 auto;font-weight:600}',
+			'.myeqosplus-address-value{min-width:0;overflow-wrap:anywhere;word-break:break-all}',
+			'@media(max-width:700px){.myeqosplus-device-table{table-layout:auto}.myeqosplus-device-table .myeqosplus-device-col,.myeqosplus-device-table .myeqosplus-address-col,.myeqosplus-device-table .myeqosplus-source-col,.myeqosplus-device-table .myeqosplus-history-col,.myeqosplus-device-table .myeqosplus-action-col{width:auto;max-width:100%}}'
+		].join('');
+		var root = E('div', { 'class': 'cbi-map' }, [ E('style', {}, pageStyle) ]);
 		var title = E('h2', {}, _('设备限速增强版'));
 		var description = E('p', { 'class': 'cbi-map-descr' }, _('此处列出当前和历史有线、无线设备。限速策略按 MAC 地址绑定，设备离线后仍会保留。'));
 		var toolbar = E('div', { 'class': 'right' });
@@ -297,13 +318,13 @@ return view.extend({
 		else
 			root.appendChild(E('p', { 'class': status.enabled ? 'alert-message' : 'alert-message warning' }, status.enabled ? (status.running ? _('服务已启用并正在运行。') : _('服务已启用，但当前未安装活动的 qdisc。')) : _('服务已禁用，未应用任何 qdisc。')));
 
-		var table = E('table', { 'class': 'table cbi-section-table' });
+		var table = E('table', { 'class': 'table cbi-section-table myeqosplus-device-table' });
 		table.appendChild(E('tr', { 'class': 'tr table-titles' }, [
-			E('th', { 'class': 'th' }, _('设备')),
-			E('th', { 'class': 'th' }, _('地址')),
-			E('th', { 'class': 'th' }, _('来源 / 接口')),
-			E('th', { 'class': 'th' }, _('历史记录')),
-			E('th', { 'class': 'th right' }, _('操作'))
+			E('th', { 'class': 'th myeqosplus-device-col' }, _('设备')),
+			E('th', { 'class': 'th myeqosplus-address-col' }, _('地址')),
+			E('th', { 'class': 'th myeqosplus-source-col' }, _('来源 / 接口')),
+			E('th', { 'class': 'th myeqosplus-history-col' }, _('历史记录')),
+			E('th', { 'class': 'th right myeqosplus-action-col' }, _('操作'))
 		]));
 		if (!devices.length) {
 			table.appendChild(E('tr', {}, [ E('td', { 'colspan': 5 }, _('尚未发现设备，请点击“刷新设备”。')) ]));
@@ -311,8 +332,8 @@ return view.extend({
 		devices.forEach(function(device) {
 			var p = policyFor(device.mac) || {};
 			var addresses = [];
-			if (device.ipv4) addresses.push(E('div', {}, 'IPv4: ' + device.ipv4));
-			if (device.ipv6) addresses.push(E('div', {}, 'IPv6: ' + device.ipv6));
+			appendAddressRows(addresses, 'IPv4', device.ipv4);
+			appendAddressRows(addresses, 'IPv6', device.ipv6);
 			if (!addresses.length) addresses.push(E('div', {}, _('当前无 IP 地址')));
 			var source = [sourceText(device.sources), interfaceText(device.interfaces)].filter(Boolean).join(' / ');
 			var state = device.online ? _('在线') : _('离线 / 历史设备');
@@ -321,11 +342,11 @@ return view.extend({
 			var edit = E('button', { 'class': 'cbi-button cbi-button-action' }, p.mac ? _('编辑限速') : _('设置限速'));
 			edit.addEventListener('click', function() { self.showPolicy(device); });
 			table.appendChild(E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td' }, [ E('strong', {}, displayName || device.mac), E('br'), E('small', {}, device.mac), E('br'), E('small', {}, state) ]),
-				E('td', { 'class': 'td' }, addresses),
-				E('td', { 'class': 'td' }, [ E('div', {}, text(source)), E('small', {}, policyText) ]),
-				E('td', { 'class': 'td' }, [ E('div', {}, _('首次发现：%s').format(timestamp(device.first_seen))), E('div', {}, _('最后发现：%s').format(timestamp(device.last_seen))) ]),
-				E('td', { 'class': 'td right' }, edit)
+				E('td', { 'class': 'td myeqosplus-device-col' }, [ E('strong', {}, displayName || device.mac), E('br'), E('small', {}, device.mac), E('br'), E('small', {}, state) ]),
+				E('td', { 'class': 'td myeqosplus-address-col' }, addresses),
+				E('td', { 'class': 'td myeqosplus-source-col' }, [ E('div', {}, text(source)), E('small', {}, policyText) ]),
+				E('td', { 'class': 'td myeqosplus-history-col' }, [ E('div', {}, _('首次发现：%s').format(timestamp(device.first_seen))), E('div', {}, _('最后发现：%s').format(timestamp(device.last_seen))) ]),
+				E('td', { 'class': 'td right myeqosplus-action-col' }, edit)
 			]));
 		});
 		root.appendChild(E('div', { 'class': 'cbi-section' }, [ table ]));
